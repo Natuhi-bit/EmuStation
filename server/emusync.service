@@ -1,0 +1,24 @@
+[Unit]
+Description=emusync - emulator save sync server
+After=network.target
+
+[Service]
+Type=simple
+User=emusync
+Group=emusync
+WorkingDirectory=/opt/emusync/server
+Environment=EMUSYNC_DATA=/var/lib/emusync
+Environment=EMUSYNC_KEEP_VERSIONS=30
+ExecStart=/opt/emusync/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=3
+StateDirectory=emusync
+StateDirectoryMode=0750
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/emusync
+
+[Install]
+WantedBy=multi-user.target

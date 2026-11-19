@@ -1,0 +1,23 @@
+# emusync クライアント設定（Android / Termux で暫定的に使う場合の例）
+# 前提：各エミュの初回設定で、データフォルダを Android/data ではなく内部ストレージ直下などに作っていること。
+#   PPSSPP : /storage/emulated/0/PSP       （設定 > システム > メモリースティックの場所 でも変更可）
+#   Vita3K : /storage/emulated/0/Vita3K    （設定 > Emulator > Emulated System Storage Folder）
+#   ARMSX2 : /storage/emulated/0/ARMSX2    （初回起動時に Custom folder を選ぶ）
+#   ARMSX3 : /storage/emulated/0/ARMSX3    （初回起動時に Custom folder を選ぶ）
+# 実際に作ったフォルダ名に合わせて書き換えること。
+
+server: https://ubuntu-server/emusync
+token: "ここに android 用に add-device したトークン"
+verify: true
+state_dir: ~/.emusync
+
+targets:
+  psp:
+    path: /storage/emulated/0/PSP/SAVEDATA
+  vita:
+    path: /storage/emulated/0/Vita3K/ux0/user/00/savedata
+  ps2:
+    path: /storage/emulated/0/ARMSX2/memcards
+    exclude: ["*.bak"]
+  ps3:
+    path: /storage/emulated/0/ARMSX3/dev_hdd0/home/00000001/savedata

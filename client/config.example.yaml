@@ -1,0 +1,34 @@
+# emusync クライアント設定（Windows の例）
+# ターゲット名はエミュ名ではなく「機種名」にする（Windows と Android でエミュが違っても同じセーブを共有するため）。
+#   psp  : PPSSPP      ⇔ PPSSPP (Android)
+#   vita : Vita3K      ⇔ Vita3K (Android)
+#   ps2  : PCSX2       ⇔ ARMSX2
+#   ps3  : RPCS3       ⇔ ARMSX3
+# パスは典型例。実際の場所は各エミュの設定画面で確認して書き換えること。
+
+server: https://ubuntu-server/emusync
+token: "ここに add-device で表示されたトークン"
+verify: true          # 自己署名証明書なら、その証明書ファイルのパス（例 C:\emusync\server.crt）
+state_dir: ~/.emusync
+
+targets:
+  psp:
+    # インストール版の既定。ポータブル版は <PPSSPPのフォルダ>\memstick\PSP\SAVEDATA
+    path: "%USERPROFILE%\\Documents\\PPSSPP\\PSP\\SAVEDATA"
+    launch: ["C:\\Emu\\PPSSPP\\PPSSPPWindows64.exe"]
+
+  vita:
+    # Vita3K の「Emulated System Storage Folder」の下の ux0\user\00\savedata
+    path: "C:\\Emu\\Vita3K\\ux0\\user\\00\\savedata"
+    launch: ["C:\\Emu\\Vita3K\\Vita3K.exe"]
+
+  ps2:
+    # メモリーカード（Mcd001.ps2 など）。ARMSX2 側とファイル名をそろえること
+    path: "%USERPROFILE%\\Documents\\PCSX2\\memcards"
+    exclude: ["*.bak"]
+    launch: ["C:\\Emu\\PCSX2\\pcsx2-qt.exe"]
+
+  ps3:
+    # RPCS3 はユーザー 00000001 のセーブフォルダだけを同期（ゲーム本体・アップデートは対象外）
+    path: "C:\\Emu\\RPCS3\\dev_hdd0\\home\\00000001\\savedata"
+    launch: ["C:\\Emu\\RPCS3\\rpcs3.exe"]
