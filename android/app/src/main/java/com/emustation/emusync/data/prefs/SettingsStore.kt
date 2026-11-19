@@ -24,6 +24,8 @@ data class AppSettings(
     val periodicPushEnabled: Boolean = true,
     /** トークンは保存されているが復号できなかった */
     val tokenUnreadable: Boolean = false,
+    /** サーバーに登録されたこの端末の名前（最後に ping が成功したときの値） */
+    val deviceName: String? = null,
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -41,6 +43,7 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
             caFileName = p[KEY_CA_FILE],
             periodicPushEnabled = p[KEY_PERIODIC] ?: true,
             tokenUnreadable = enc != null && token == null,
+            deviceName = p[KEY_DEVICE_NAME],
         )
     }.flowOn(Dispatchers.Default)
 
@@ -58,6 +61,10 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
         store.edit { p -> if (name == null) p.remove(KEY_CA_FILE) else p[KEY_CA_FILE] = name }
     }
 
+    suspend fun setDeviceName(name: String) {
+        store.edit { p -> p[KEY_DEVICE_NAME] = name }
+    }
+
     suspend fun setPeriodicPushEnabled(enabled: Boolean) {
         store.edit { p -> p[KEY_PERIODIC] = enabled }
     }
@@ -67,5 +74,6 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
         val KEY_TOKEN_ENC = stringPreferencesKey("token_enc")
         val KEY_CA_FILE = stringPreferencesKey("ca_file")
         val KEY_PERIODIC = booleanPreferencesKey("periodic_push")
+        val KEY_DEVICE_NAME = stringPreferencesKey("device_name")
     }
 }

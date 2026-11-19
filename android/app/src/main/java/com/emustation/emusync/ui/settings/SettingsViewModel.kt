@@ -9,6 +9,7 @@ import com.emustation.emusync.R
 import com.emustation.emusync.data.api.CaCertificates
 import com.emustation.emusync.data.api.EmusyncApi
 import com.emustation.emusync.ui.common.UiText
+import com.emustation.emusync.ui.common.connectionErrorText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel

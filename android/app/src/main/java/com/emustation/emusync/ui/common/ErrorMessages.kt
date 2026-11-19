@@ -1,8 +1,7 @@
-package com.emustation.emusync.ui.settings
+package com.emustation.emusync.ui.common
 
 import com.emustation.emusync.R
 import com.emustation.emusync.data.api.ApiException
-import com.emustation.emusync.ui.common.UiText
 
 /** 接続エラーを利用者向けの文言にする */
 fun connectionErrorText(e: Throwable): UiText = when (e) {

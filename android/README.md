@@ -8,7 +8,8 @@
 |---|---|---|
 | 1 | 設定画面、URL とトークンの保存、CA の取り込み、接続テスト | 完了 |
 | 2 | 同期エンジン（UI なし）と単体テスト | 完了 |
-| 3〜6 | ターゲット管理、プレイの流れ、競合・履歴、定期送信 | 未着手 |
+| 3 | ホーム、ターゲット編集、権限の要求、dry-run、手動同期、同期ログ（Room、WorkManager） | 完了 |
+| 4〜6 | プレイの流れ、競合・履歴、定期送信 | 未着手 |
 
 ## ビルド
 
@@ -40,7 +41,12 @@ android/scripts/server-integration.sh
 - `FnmatchTest`：除外パターンの照合を Python の `fnmatch` の結果と照合する（`scripts/gen_fnmatch_cases.py`）
 - `FakeServerScenarioTest` / `RealServerScenarioTest`：§11 のシナリオ 1〜6
 
-## 構成（段階 2 の時点）
+## 画面のテスト
+
+エミュレーターが無くても画面を確かめられるように、Robolectric で Compose の画面を動かしている
+（`HomeScreenTest`, `TargetEditScreenTest`, `SyncLogScreenTest`）。画面の画像は `app/build/screenshots/` に出る。
+
+## 構成（段階 3 の時点）
 
 ```
 app/src/main/java/com/emustation/emusync/
@@ -52,8 +58,17 @@ app/src/main/java/com/emustation/emusync/
   data/storage/HashCache.kt    # ハッシュのキャッシュ（段階 3 で Room にする）
   domain/sync/SyncEngine.kt    # §4 の同期エンジン（Android に依存しない）
   domain/sync/Ports.kt         # RemoteApi / LocalFs / BaseStateStore
+  data/db/                     # Room（targets, base_state, hash_cache, play_sessions, conflicts, sync_log）
+  data/SyncRepository.kt       # 同期の実行と記録（競合・同期ログ）、手元の状態、ターゲットの削除
+  data/storage/TreeUriPaths.kt # フォルダ選択の URI → 実パス
+  data/apps/LauncherApps.kt    # ランチャーアプリの一覧
+  domain/Presets.kt            # psp / vita / ps2 / ps3
+  work/SyncWorker.kt           # 手動同期のジョブ（sync-<target>、KEEP、expedited）
   data/prefs/SettingsStore.kt  # DataStore
   data/prefs/TokenCipher.kt    # Android Keystore の AES-GCM 鍵でトークンを暗号化
+  ui/home/                     # ホーム（ターゲット一覧、状態、メニュー、プレビュー）
+  ui/target/                   # ターゲットの追加・編集（保存前の dry-run）
+  ui/log/                      # 同期ログ
   ui/settings/                 # 設定画面
   AppContainer.kt, EmusyncApp.kt, MainActivity.kt
 ```

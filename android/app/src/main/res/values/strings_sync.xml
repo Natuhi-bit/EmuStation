@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 共通 -->
+    <string name="cd_back">戻る</string>
+    <string name="cd_menu">メニュー</string>
+    <string name="action_back">戻る</string>
+    <string name="action_close">閉じる</string>
+    <string name="action_choose">選ぶ</string>
+    <string name="action_unset">未設定にする</string>
+
+    <!-- ホーム -->
+    <string name="action_sync_all">すべて同期</string>
+    <string name="action_add_target">ターゲットを追加</string>
+    <string name="action_sync_now">今すぐ同期</string>
+    <string name="action_pull_only">取得のみ</string>
+    <string name="action_push_only">送信のみ</string>
+    <string name="action_preview">プレビュー（dry-run）</string>
+    <string name="action_edit">編集</string>
+    <string name="server_checking">サーバーに接続しています…</string>
+    <string name="server_connected">サーバーに接続しました（この端末: %1$s）</string>
+    <string name="server_not_configured">サーバーが設定されていません</string>
+    <string name="banner_all_files">セーブフォルダを読み書きするため、「すべてのファイルへのアクセス」を許可してください</string>
+    <string name="banner_notifications">同期とプレイ中の表示に通知を使います。通知を許可してください</string>
+    <string name="home_empty">ターゲットがありません。右下の ＋ から追加してください</string>
+    <string name="emu_not_set">エミュ: 未設定</string>
+    <string name="emu_missing">エミュがアンインストールされています</string>
+    <string name="last_sync">最後の同期: %1$s</string>
+    <string name="last_sync_never">まだ同期していません</string>
+
+    <!-- 状態 -->
+    <string name="status_synced">同期済み</string>
+    <string name="status_unsent">未送信の変更あり（%1$d 件）</string>
+    <string name="status_never_synced">未同期</string>
+    <string name="status_conflicts">競合 %1$d 件</string>
+    <string name="status_playing_elsewhere">%1$s がプレイ中</string>
+    <string name="status_playing_here">この端末でプレイ中</string>
+    <string name="status_data_dir_missing">データフォルダが見つかりません</string>
+    <string name="status_no_permission">ファイルへのアクセスが未許可</string>
+    <string name="status_scan_failed">フォルダを読めません</string>
+    <string name="status_disabled">無効</string>
+    <string name="status_syncing">同期中</string>
+
+    <!-- 同期の結果 -->
+    <string name="sum_uploaded">送信 %1$d</string>
+    <string name="sum_downloaded">取得 %1$d</string>
+    <string name="sum_conflicts">競合 %1$d</string>
+    <string name="sum_errors">失敗 %1$d</string>
+    <string name="sum_nothing">変更なし</string>
+    <string name="msg_sync_finished">%1$s: %2$s</string>
+    <string name="msg_sync_failed">%1$s: 同期できませんでした。%2$s</string>
+    <string name="msg_no_enabled_targets">有効なターゲットがありません</string>
+    <string name="preview_title">%1$s のプレビュー</string>
+    <string name="preview_running">サーバーの一覧を取得しています…</string>
+    <string name="preview_conflict_note">競合のファイルは、同期しても上書きしません。サーバー版を保存して知らせます</string>
+
+    <!-- 同期全体の失敗 -->
+    <string name="err_server_not_configured">サーバーが設定されていません。設定画面で URL とトークンを入力してください</string>
+    <string name="err_no_storage_access">「すべてのファイルへのアクセス」が許可されていません</string>
+    <string name="err_data_dir_missing">データフォルダが見つかりません: %1$s</string>
+    <string name="err_target_missing">ターゲット %1$s がありません</string>
+
+    <!-- モード -->
+    <string name="mode_sync">同期</string>
+    <string name="mode_pull">取得のみ</string>
+    <string name="mode_push">送信のみ</string>
+    <string name="mode_dry_run">プレビュー</string>
+    <string name="prefer_local">手元を残す</string>
+    <string name="prefer_remote">サーバー版を使う</string>
+
+    <!-- 通知 -->
+    <string name="channel_sync">同期</string>
+    <string name="notif_syncing">%1$s を同期しています</string>
+
+    <!-- ターゲットの編集 -->
+    <string name="target_add_title">ターゲットを追加</string>
+    <string name="target_edit_title">ターゲットを編集</string>
+    <string name="label_preset">機種</string>
+    <string name="preset_custom">自由入力</string>
+    <string name="preset_hint">%1$s（%2$s）。データフォルダの例: %3$s</string>
+    <string name="label_target_name">ターゲット名</string>
+    <string name="hint_target_name">サーバー上のフォルダ名。Windows 側と同じ名前にします（英数字と . _ - のみ）</string>
+    <string name="label_emulator">エミュのアプリ</string>
+    <string name="app_picker_title">エミュのアプリを選ぶ</string>
+    <string name="app_picker_search">検索</string>
+    <string name="label_data_dir">エミュのデータフォルダ</string>
+    <string name="action_pick_folder">フォルダを選ぶ</string>
+    <string name="label_rel_subdir">同期するフォルダ（データフォルダからの相対パス）</string>
+    <string name="hint_rel_subdir">空ならデータフォルダ全体</string>
+    <string name="label_sync_dir">同期するフォルダ</string>
+    <string name="label_excludes">除外パターン</string>
+    <string name="hint_excludes">1行に1つ。例 *.bak（相対パス全体とファイル名の両方に照合します）</string>
+    <string name="label_enabled">有効</string>
+    <string name="hint_enabled">無効にすると「すべて同期」の対象から外します</string>
+    <string name="action_check_and_save">確認して保存</string>
+    <string name="warn_android_data">Android/data の中は、他のアプリから読めません。エミュの設定でデータフォルダを移してください</string>
+    <string name="warn_data_dir_missing">データフォルダが見つかりません（「すべてのファイルへのアクセス」が未許可の場合も、こう表示されます）</string>
+    <string name="warn_sync_dir_missing">同期するフォルダはまだありません。エミュでセーブするか、取得すると作られます</string>
+    <string name="err_target_name_empty">ターゲット名を入力してください</string>
+    <string name="err_target_name_chars">英数字と . _ - だけが使えます</string>
+    <string name="err_target_name_dup">同じ名前のターゲットがあります</string>
+    <string name="err_data_dir_empty">データフォルダを入力するか、選んでください</string>
+    <string name="err_data_dir_absolute">/ で始まる実パスを入力してください</string>
+    <string name="err_rel_subdir">. や .. は使えません</string>
+    <string name="err_tree_uri">このフォルダは実パスに変換できません。手入力してください</string>
+    <string name="save_check_title">この設定で同期すると</string>
+    <string name="save_check_header">初めての同期で手元やサーバーを壊さないように、予定される操作を確認してください（まだ何も変えていません）</string>
+    <string name="save_check_failed_note">確認できませんでしたが、設定は保存できます</string>
+    <string name="target_delete_title">%1$s を削除しますか？</string>
+    <string name="target_delete_message">このアプリの設定と同期の記録を消します。手元のファイルとサーバー上のファイルは消えません</string>
+
+    <!-- 同期ログ -->
+    <string name="sync_log_title">同期ログ</string>
+    <string name="sync_log_hint">直近 100 回の同期の結果</string>
+    <string name="sync_log_empty">まだ同期していません</string>
+    <string name="action_open_log">同期ログを見る</string>
+</resources>
