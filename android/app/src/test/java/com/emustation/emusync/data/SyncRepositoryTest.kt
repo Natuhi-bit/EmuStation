@@ -179,4 +179,26 @@ class SyncRepositoryTest {
         assertTrue("$o", o is SyncOutcome.Failed)
         assertEquals(id, (o as SyncOutcome.Failed).message.id)
     }
+
+    @Test
+    fun fileErrors_areDescribedForPeople() = runBlocking {
+        local("big.bin", "x")
+        local("ok.bin", "y")
+        remote = object : RemoteApi by server.client("phone") {
+            override suspend fun upload(
+                path: String,
+                content: com.emustation.emusync.domain.sync.UploadContent,
+                baseVersion: Int,
+            ): com.emustation.emusync.domain.sync.UploadOutcome =
+                if (path.endsWith("big.bin")) throw ApiException.Http(413, "大きすぎます")
+                else server.client("phone").upload(path, content, baseVersion)
+        }
+        val r = (repo.run(target, SyncMode.SYNC) as SyncOutcome.Done).result
+        assertEquals(listOf("ok.bin"), r.uploaded)
+        assertEquals(context.getString(R.string.err_file_too_large), r.errors.single().message)
+        assertEquals(
+            listOf("big.bin: " + context.getString(R.string.err_file_too_large)),
+            db.syncLog().observeRecent().first().single().errors,
+        )
+    }
 }

@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -96,6 +97,20 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLog: 
             ServerSection(state, viewModel)
             CaSection(state, viewModel)
             PermissionSection()
+            Section(stringResource(R.string.section_periodic)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.label_periodic_push), style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.hint_periodic_push), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = state.periodicPush,
+                        onCheckedChange = viewModel::setPeriodicPush,
+                        enabled = state.loaded,
+                    )
+                }
+            }
             Section(stringResource(R.string.sync_log_title)) {
                 Text(stringResource(R.string.sync_log_hint), style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = onOpenLog) { Text(stringResource(R.string.action_open_log)) }

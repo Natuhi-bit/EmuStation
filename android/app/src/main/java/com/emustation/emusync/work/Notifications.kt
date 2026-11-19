@@ -105,6 +105,47 @@ object Notifications {
             .build(),
     )
 
+    private const val ID_PERIODIC_ERROR = 3
+
+    /** 定期送信で、新しい競合が見つかった */
+    fun showPeriodicConflicts(context: Context, target: String, machine: String, count: Int) = notify(
+        context, 200_000 + (target.hashCode() and 0x7fffffff) % 100_000,
+        NotificationCompat.Builder(context, CHANNEL_RESULT)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(context.getString(R.string.notif_periodic_conflicts, machine, count))
+            .setContentText(context.getString(R.string.notif_periodic_conflicts_text))
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+            .build(),
+    )
+
+    /** 定期送信が、つながらない以外の理由で失敗した（トークンが無効 など）。同じエラーは繰り返さない */
+    fun showPeriodicError(context: Context, text: String) = notify(
+        context, ID_PERIODIC_ERROR,
+        NotificationCompat.Builder(context, CHANNEL_RESULT)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(context.getString(R.string.notif_periodic_error))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+            .build(),
+    )
+
+    /** 「送信を忘れていませんか」（設計書 §5.3）。プレイ中の通知を置き換える */
+    fun showForgotten(context: Context, target: String, machine: String) = notify(
+        context, playId(target),
+        NotificationCompat.Builder(context, CHANNEL_RESULT)
+            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setContentTitle(context.getString(R.string.notif_forgotten, machine))
+            .setContentText(context.getString(R.string.notif_forgotten_text))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(context.getString(R.string.notif_forgotten_text)))
+            .setOngoing(true)
+            .setContentIntent(openApp(context))
+            .addAction(finishAction(context, target, R.string.action_finish_play))
+            .build(),
+    )
+
     fun cancel(context: Context, id: Int) = NotificationManagerCompat.from(context).cancel(id)
 
     private fun notify(context: Context, id: Int, n: android.app.Notification) {

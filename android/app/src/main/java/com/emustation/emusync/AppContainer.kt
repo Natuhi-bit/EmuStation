@@ -10,6 +10,7 @@ import com.emustation.emusync.data.db.AppDatabase
 import com.emustation.emusync.data.prefs.AppSettings
 import com.emustation.emusync.data.prefs.KeystoreTokenCipher
 import com.emustation.emusync.data.prefs.SettingsStore
+import com.emustation.emusync.domain.periodic.PeriodicPushRunner
 import com.emustation.emusync.domain.play.PlaySessionManager
 import com.emustation.emusync.ui.settings.Permissions
 import java.io.File
@@ -58,6 +59,17 @@ class AppContainer(context: Context) {
                 // URL やトークンが不正なときも「未設定」と同じに扱う
                 if (s.serverUrl.isBlank() || s.token.isBlank()) null else runCatching { api(s) }.getOrNull()
             },
+        )
+    }
+
+    val periodicPushRunner: PeriodicPushRunner by lazy {
+        PeriodicPushRunner(
+            targets = db.targets(),
+            sessions = db.playSessions(),
+            conflicts = db.conflicts(),
+            sync = syncRepository,
+            notices = settingsStore,
+            resolve = { it.resolve(appContext) },
         )
     }
 }

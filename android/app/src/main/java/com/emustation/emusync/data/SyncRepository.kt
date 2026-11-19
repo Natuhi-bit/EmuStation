@@ -1,6 +1,7 @@
 package com.emustation.emusync.data
 
 import com.emustation.emusync.R
+import com.emustation.emusync.data.api.ApiException
 import com.emustation.emusync.data.db.AppDatabase
 import com.emustation.emusync.data.db.ConflictEntity
 import com.emustation.emusync.data.db.RoomBaseStateStore
@@ -12,6 +13,7 @@ import com.emustation.emusync.data.storage.JavaLocalFs
 import com.emustation.emusync.domain.sync.Prefer
 import com.emustation.emusync.domain.sync.RemoteApi
 import com.emustation.emusync.domain.sync.SyncEngine
+import com.emustation.emusync.domain.sync.SyncError
 import com.emustation.emusync.domain.sync.SyncMode
 import com.emustation.emusync.domain.sync.SyncResult
 import com.emustation.emusync.domain.sync.SyncTarget
@@ -72,6 +74,7 @@ class SyncRepository(
         dryRun: Boolean = false,
         log: Boolean = true,
         only: Set<String>? = null,
+        quiet: Boolean = false,
     ): SyncOutcome {
         val startedAt = clock()
         val outcome = try {
@@ -86,14 +89,19 @@ class SyncRepository(
                 )
                 val r = engine.sync(target.toSyncTarget(), mode, prefer, dryRun, only)
                 if (!dryRun) recordConflicts(target.name, r, only)
-                SyncOutcome.Done(r)
+                SyncOutcome.Done(r.copy(errors = r.errors.map { it.copy(message = describeFileError(it)) }))
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             SyncOutcome.Failed(connectionErrorText(e), e)
         }
-        if (log) {
+        // quiet（定期送信）：何も起きなかった回と、つながらなかった回はログに残さない
+        val boring = when (outcome) {
+            is SyncOutcome.Done -> !outcome.result.hasChanges
+            is SyncOutcome.Failed -> outcome.cause is ApiException.Offline || outcome.cause is ApiException.Network
+        }
+        if (log && !(quiet && boring)) {
             val r = (outcome as? SyncOutcome.Done)?.result
             db.syncLog().insertAndTrim(
                 SyncLogEntity(
@@ -127,6 +135,22 @@ class SyncRepository(
         val kept = rows.mapNotNull { it.savedCopyPath }.toSet()
         withContext(Dispatchers.IO) {
             before.mapNotNull { it.savedCopyPath }.filter { it !in kept }.forEach { File(it).delete() }
+        }
+    }
+
+    /** ファイルごとの失敗を、利用者向けの文言にする */
+    private fun describeFileError(e: SyncError): String {
+        val c = e.cause ?: return e.message
+        val text = c.message.orEmpty()
+        return when {
+            c is ApiException.Http && c.code == 413 -> resolve(UiText(R.string.err_file_too_large))
+            c is ApiException -> resolve(connectionErrorText(c))
+            text.contains("ENOSPC") || text.contains("No space left", ignoreCase = true) ->
+                resolve(UiText(R.string.err_no_space))
+            c is java.io.FileNotFoundException || c is java.nio.file.AccessDeniedException ||
+                text.contains("EACCES") || text.contains("Permission denied", ignoreCase = true) ->
+                resolve(UiText(R.string.err_file_access, text))
+            else -> e.message
         }
     }
 

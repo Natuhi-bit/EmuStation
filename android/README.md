@@ -11,7 +11,7 @@
 | 3 | ホーム、ターゲット編集、権限の要求、dry-run、手動同期、同期ログ（Room、WorkManager） | 完了 |
 | 4 | プレイの流れ（ロック、423・オフラインのダイアログ、起動、通知、戻ったときの確認、送信ジョブ） | 完了 |
 | 5 | 競合（ファイルごと・一括で解決）、履歴と復元の画面 | 完了 |
-| 6 | 定期送信と仕上げ | 未着手 |
+| 6 | 定期送信（1時間ごと、PUSH のみ）、送信し忘れの通知、エラー表示の整理 | 完了 |
 
 ## ビルド
 
@@ -50,7 +50,7 @@ android/scripts/server-integration.sh
 エミュレーターが無くても画面を確かめられるように、Robolectric で Compose の画面を動かしている
 （`HomeScreenTest`, `TargetEditScreenTest`, `SyncLogScreenTest`）。画面の画像は `app/build/screenshots/` に出る。
 
-## 構成（段階 5 の時点）
+## 構成
 
 ```
 app/src/main/java/com/emustation/emusync/
@@ -68,6 +68,8 @@ app/src/main/java/com/emustation/emusync/
   data/apps/LauncherApps.kt    # ランチャーアプリの一覧
   domain/Presets.kt            # psp / vita / ps2 / ps3
   domain/play/PlaySessionManager.kt # §5 のプレイの流れ（ロック → 同期 → 記録、送信して終了）
+  domain/periodic/PeriodicPushRunner.kt # §5.3 の定期送信（PUSH のみ、送信し忘れの判定、通知の重複を防ぐ）
+  work/PeriodicPushWorker.kt   # 定期送信のジョブ（periodic-push、1時間ごと、ネットワーク接続時）
   work/Notifications.kt        # プレイ中・結果の通知
   work/NotificationActionReceiver.kt # 通知の [送信して終了] / [再試行]
   work/SyncWorker.kt           # 手動同期のジョブ（sync-<target>、KEEP、expedited）

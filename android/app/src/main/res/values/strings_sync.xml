@@ -200,4 +200,19 @@
     <string name="pull_after_restore_text">手元のファイルを、戻した版で置き換えます（このファイルだけを取得します）。手元も変えていた場合は、上書きせずに競合として知らせます</string>
     <string name="msg_pulled">取得して、手元に反映しました</string>
     <string name="msg_pull_conflict">手元も変わっているため、競合になりました。競合の画面で選んでください</string>
+
+    <!-- 定期送信（設計書 §5.3） -->
+    <string name="section_periodic">定期送信</string>
+    <string name="label_periodic_push">1時間ごとに送信する</string>
+    <string name="hint_periodic_push">ネットワークにつながっているときに、手元の変更を送信します（取得はしません）。この端末でプレイ中のターゲットは送信しません。12 時間以上プレイ中のままなら、送信し忘れを知らせます</string>
+    <string name="notif_periodic_conflicts">%1$s: 競合が %2$d 件あります</string>
+    <string name="notif_periodic_conflicts_text">定期送信で見つかりました。何も上書きしていません。アプリで確認してください</string>
+    <string name="notif_periodic_error">定期送信ができません</string>
+    <string name="notif_forgotten">%1$s のセーブを送信し忘れていませんか</string>
+    <string name="notif_forgotten_text">12 時間以上、プレイ中のままです。遊び終わっていたら、エミュを終了してから [送信して終了] を押してください</string>
+
+    <!-- ファイルごとの失敗 -->
+    <string name="err_file_too_large">ファイルが大きすぎます（サーバーの上限を超えています）</string>
+    <string name="err_no_space">端末の空き容量が足りません</string>
+    <string name="err_file_access">ファイルを読み書きできません（%1$s）</string>
 </resources>

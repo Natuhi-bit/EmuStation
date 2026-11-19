@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.emustation.emusync.domain.periodic.PeriodicNoticeState
+import com.emustation.emusync.domain.periodic.PeriodicNoticeStore
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +34,7 @@ data class AppSettings(
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
 
 /** アプリ設定（設計書 §7）。トークンは Keystore の鍵で暗号化して保存する */
-class SettingsStore(context: Context, private val cipher: TokenCipher) {
+class SettingsStore(context: Context, private val cipher: TokenCipher) : PeriodicNoticeStore {
     private val store = context.applicationContext.settingsDataStore
 
     val settings: Flow<AppSettings> = store.data.map { p ->
@@ -69,11 +72,25 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) {
         store.edit { p -> p[KEY_PERIODIC] = enabled }
     }
 
+    override suspend fun loadNotices(): PeriodicNoticeState {
+        val p = store.data.first()
+        return PeriodicNoticeState(p[KEY_REMINDED].orEmpty(), p[KEY_LAST_ERROR])
+    }
+
+    override suspend fun saveNotices(state: PeriodicNoticeState) {
+        store.edit { p ->
+            p[KEY_REMINDED] = state.remindedSessions
+            if (state.lastError == null) p.remove(KEY_LAST_ERROR) else p[KEY_LAST_ERROR] = state.lastError
+        }
+    }
+
     private companion object {
         val KEY_SERVER_URL = stringPreferencesKey("server_url")
         val KEY_TOKEN_ENC = stringPreferencesKey("token_enc")
         val KEY_CA_FILE = stringPreferencesKey("ca_file")
         val KEY_PERIODIC = booleanPreferencesKey("periodic_push")
         val KEY_DEVICE_NAME = stringPreferencesKey("device_name")
+        val KEY_REMINDED = stringSetPreferencesKey("periodic_reminded_sessions")
+        val KEY_LAST_ERROR = stringPreferencesKey("periodic_last_error")
     }
 }

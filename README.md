@@ -118,19 +118,29 @@ if errorlevel 1 pause
 - **ステートセーブ（どこでもセーブ）は同期しない方が安全。** エミュのバージョンやCPUアーキテクチャ（x64 と ARM）が違うと読めないことがある。ゲーム内セーブ（メモリーカード・SAVEDATA など）を中心に同期する
 - **BIOS・キャッシュ・ログ**は `exclude:` で外す
 
-## 5. Android について
+## 5. Android アプリ
 
-当面の使い方としては、Termux で同じ `emusync.py` が動く：
+`android/` に Kotlin のアプリがある（設計書：[`docs/android-app-design.md`](docs/android-app-design.md)、開発者向け：[`android/README.md`](android/README.md)）。
+
+### ビルドと導入
 ```bash
-pkg install python && pip install requests pyyaml
-termux-setup-storage            # /storage/emulated/0 を読めるようにする
-python emusync.py -c config.yaml sync
+cd android
+./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
 ```
-ただし Android 11 以降は、ほかのアプリの `/Android/data/…` を外部アプリから読めない。
-**各エミュのセーブ（ユーザーデータ）フォルダを、共有ストレージ側（例 `/storage/emulated/0/Emu/...`）に変更できるか**をまず確認する。
-保存先を変更できないエミュは、外部の同期アプリからは扱えない。
+自分用なので Google Play には出さず、APK を端末に直接入れる（「提供元不明のアプリ」を許可する）。
 
-本番用には Kotlin のアプリにする予定：WorkManager で定期的に同期し、SAF でフォルダを読み書きし、「エミュを起動する前に取得→戻ってきたら送信」を行うランチャー画面を持たせる。サーバー側の API はこのままでよい。
+### 最初の設定
+1. **設定**：サーバー URL（例 `https://ubuntu-server/emusync`）とトークン（`app.py add-device android-phone` で発行）を入れ、[接続テスト]。証明書が自己署名なら CA 証明書（`.crt` / `.pem`）を取り込む
+2. **権限**：「すべてのファイルへのアクセス」と「通知」を許可する
+3. **ターゲットの追加**（右下の ＋）：機種（psp / vita / ps2 / ps3）、エミュのアプリ、エミュのデータフォルダを選ぶ。保存の前に「送信・取得・競合が何件になるか」を確認できる
+   - 各エミュのデータフォルダは、`Android/data/` の外（例 `/storage/emulated/0/ARMSX2`）に作っておく。`Android/data/` の中は、ほかのアプリから読めない
+
+### 使い方
+- **[遊ぶ]**：ロック → 取得と送信 → エミュを起動。ほかの端末がプレイ中なら知らせる（奪って起動もできる）。つながらないときは、同期せずに起動できる
+- **遊び終わったら**：エミュを終了してから、通知の **[送信して終了]**、またはアプリに戻って [送信]。送信してロックを解除する
+- **競合**：両方で変わったファイルは上書きしない。ホームの「競合 n 件」から、ファイルごとに「手元を残す」「サーバー版を使う」を選ぶ
+- **履歴**：行のメニューの「履歴」から、ファイルの過去の版に戻せる
+- **定期送信**：1時間ごとに、手元の変更を送信する（取得はしない。プレイ中のターゲットは送らない）。設定で止められる
 
 ---
 

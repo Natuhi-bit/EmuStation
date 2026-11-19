@@ -89,7 +89,7 @@ class SyncEngine(
                     throw e
                 } catch (e: Exception) {
                     // 1ファイルの失敗で全体を止めない
-                    errors += SyncError(rel, e.message ?: e.javaClass.simpleName)
+                    errors += SyncError(rel, e.message ?: e.javaClass.simpleName, e)
                 }
             }
 

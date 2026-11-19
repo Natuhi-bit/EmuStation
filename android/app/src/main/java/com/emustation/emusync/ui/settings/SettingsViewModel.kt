@@ -10,6 +10,7 @@ import com.emustation.emusync.data.api.CaCertificates
 import com.emustation.emusync.data.api.EmusyncApi
 import com.emustation.emusync.ui.common.UiText
 import com.emustation.emusync.ui.common.connectionErrorText
+import com.emustation.emusync.work.PeriodicPushWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -50,6 +51,7 @@ data class SettingsUiState(
     val caFileName: String? = null,
     val ca: CaInfo? = null,
     val test: TestState = TestState.Idle,
+    val periodicPush: Boolean = true,
 ) {
     val dirty: Boolean get() = serverUrl.trim() != savedServerUrl || token.trim() != savedToken
 }
@@ -78,11 +80,21 @@ class SettingsViewModel(
                     savedToken = s.token,
                     tokenUnreadable = s.tokenUnreadable,
                     caFileName = s.caFileName,
+                    periodicPush = s.periodicPushEnabled,
                     ca = s.caFileName?.let { name ->
                         withContext(Dispatchers.IO) { container.caStore.load(name) }?.toInfo()
                     },
                 )
             }
+        }
+    }
+
+    /** 定期送信（1時間ごと）の有効・無効（設計書 §5.3） */
+    fun setPeriodicPush(enabled: Boolean) {
+        _state.update { it.copy(periodicPush = enabled) }
+        viewModelScope.launch {
+            container.settingsStore.setPeriodicPushEnabled(enabled)
+            PeriodicPushWorker.schedule(app, enabled)
         }
     }
 

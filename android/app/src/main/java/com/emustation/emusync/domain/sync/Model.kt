@@ -81,7 +81,8 @@ data class SyncConflict(
     }
 }
 
-data class SyncError(val rel: String, val message: String)
+/** ファイルごとの失敗。[cause] は元の例外（利用者向けの文言に直すときに使う） */
+data class SyncError(val rel: String, val message: String, val cause: Throwable? = null)
 
 data class SyncResult(
     val target: String,
