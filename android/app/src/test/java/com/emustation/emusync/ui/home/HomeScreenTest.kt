@@ -51,6 +51,8 @@ class HomeScreenTest {
         override fun dismissPlayDialog() { calls += "dismissPlayDialog" }
         override fun finishPlay(target: String) { calls += "finishPlay $target" }
         override fun keepPlaying() { calls += "keepPlaying" }
+        override fun openConflicts(target: String) { calls += "conflicts $target" }
+        override fun openHistory(target: String) { calls += "history $target" }
     }
 
     private val time = 1_763_560_000_000L
@@ -198,7 +200,11 @@ class HomeScreenTest {
         compose.onNode(isDialog()).saveScreenshot("play-conflicts")
         compose.onNodeWithText("やめる").performClick()
         compose.onNodeWithText("無視して起動").performClick()
-        assertEquals(listOf("abortPlay ps3", "playIgnoringConflicts ps3"), calls)
+        compose.onNodeWithText("競合を見る").performClick()
+        assertEquals(
+            listOf("abortPlay ps3", "playIgnoringConflicts ps3", "abortPlay ps3", "conflicts ps3"),
+            calls,
+        )
     }
 
     @Test
@@ -226,5 +232,17 @@ class HomeScreenTest {
         compose.onNodeWithText("まだ遊ぶ").performClick()
         compose.onNodeWithText("送信").performClick()
         assertEquals(listOf("keepPlaying", "finishPlay psp"), calls)
+    }
+
+    @Test
+    fun conflictChipAndMenu_openScreens() {
+        show(HomeUiState(loaded = true, server = ServerState.Connected("p"), rows = rows))
+        compose.onNodeWithText("競合 1 件").performClick()
+        compose.onNodeWithTag("menu-ps3").performClick()
+        compose.onNodeWithText("競合を見る").performClick()
+        compose.onNodeWithTag("menu-psp").performClick()
+        compose.onNodeWithText("競合を見る").assertDoesNotExist() // 競合がなければ出さない
+        compose.onNodeWithText("履歴").performClick()
+        assertEquals(listOf("conflicts ps3", "conflicts ps3", "history psp"), calls)
     }
 }

@@ -153,4 +153,51 @@
     <string name="notif_finished_conflicts">%1$s: 競合が %2$d 件あります</string>
     <string name="notif_finished_conflicts_text">%1$s。競合のファイルは送信していません。アプリで確認してください</string>
     <string name="notif_finish_failed">%1$s: 送信できませんでした</string>
+
+    <!-- 競合（設計書 §6.4） -->
+    <string name="action_open_conflicts">競合を見る</string>
+    <string name="action_history">履歴</string>
+    <string name="action_ok">OK</string>
+    <string name="action_later">あとで</string>
+    <string name="loading">読み込んでいます…</string>
+    <string name="conflict_title">%1$s の競合</string>
+    <string name="conflict_none">競合はありません</string>
+    <string name="conflict_help">手元とサーバーの両方で変わったファイルです。どちらを残すかを選んでください。決められないときは、そのままにしておけます（何も上書きしません）</string>
+    <string name="conflict_playing">この端末でプレイ中のため、サーバー版は使えません。エミュを終了して「送信して終了」を押してから選んでください</string>
+    <string name="conflict_bulk">%1$d 件まとめて</string>
+    <string name="conflict_kind_rejected">送信中に他の端末が更新しました</string>
+    <string name="conflict_local">手元</string>
+    <string name="conflict_local_missing">ありません</string>
+    <string name="conflict_server">サーバー</string>
+    <string name="conflict_server_version">版 %1$d</string>
+    <string name="action_keep_local">手元を残す</string>
+    <string name="action_use_remote">サーバー版を使う</string>
+    <string name="action_keep_local_all">すべて手元を残す</string>
+    <string name="action_use_remote_all">すべてサーバー版を使う</string>
+    <string name="confirm_keep_local_title">手元の版を送信します（%1$d 件）</string>
+    <string name="confirm_keep_local_text">手元の版をサーバーの最新にします。サーバーの今の版は履歴に残るので、あとで戻せます</string>
+    <string name="confirm_use_remote_title">サーバー版にします（%1$d 件）</string>
+    <string name="confirm_use_remote_text">手元のファイルをアプリの backups/ に退避してから、サーバー版で置き換えます</string>
+    <string name="msg_resolved_local">手元の版を送信しました（%1$d 件）</string>
+    <string name="msg_resolved_remote">サーバー版にしました（%1$d 件）。手元の版は backups/ に退避しました</string>
+    <string name="msg_resolve_still_conflicts">まだ競合が %1$d 件あります（他の端末が更新した可能性があります）</string>
+
+    <!-- 履歴（設計書 §6.5） -->
+    <string name="history_title">%1$s の履歴</string>
+    <string name="history_files_help">サーバー上のファイルです。選ぶと、残っている版の一覧を表示します</string>
+    <string name="history_no_files">サーバーにファイルがありません</string>
+    <string name="history_file_line">版 %1$d・%2$s・%3$s・%4$s</string>
+    <string name="file_history_title">版の履歴</string>
+    <string name="badge_latest">最新</string>
+    <string name="badge_same_as_local">手元と同じ</string>
+    <string name="action_restore_this">この版に戻す</string>
+    <string name="action_restore">戻す</string>
+    <string name="action_pull_now">取得する</string>
+    <string name="restore_title">v%1$d に戻しますか？</string>
+    <string name="restore_text">v%1$d の内容を、新しい版（v%2$d）として最新にします。今までの版は履歴に残ります</string>
+    <string name="msg_restored">v%1$d の内容を v%2$d として最新にしました</string>
+    <string name="pull_after_restore_title">v%1$d を取得しますか？</string>
+    <string name="pull_after_restore_text">手元のファイルを、戻した版で置き換えます（このファイルだけを取得します）。手元も変えていた場合は、上書きせずに競合として知らせます</string>
+    <string name="msg_pulled">取得して、手元に反映しました</string>
+    <string name="msg_pull_conflict">手元も変わっているため、競合になりました。競合の画面で選んでください</string>
 </resources>

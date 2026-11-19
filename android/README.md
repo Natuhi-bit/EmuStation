@@ -10,7 +10,8 @@
 | 2 | 同期エンジン（UI なし）と単体テスト | 完了 |
 | 3 | ホーム、ターゲット編集、権限の要求、dry-run、手動同期、同期ログ（Room、WorkManager） | 完了 |
 | 4 | プレイの流れ（ロック、423・オフラインのダイアログ、起動、通知、戻ったときの確認、送信ジョブ） | 完了 |
-| 5〜6 | 競合・履歴・復元の画面、定期送信と仕上げ | 未着手 |
+| 5 | 競合（ファイルごと・一括で解決）、履歴と復元の画面 | 完了 |
+| 6 | 定期送信と仕上げ | 未着手 |
 
 ## ビルド
 
@@ -34,6 +35,7 @@ android/scripts/server-integration.sh
 - 同期のシナリオ 1〜6（設計書 §11）
 - Python 版クライアント（client/emusync.py）との相互運用：互いに送ったファイルを取得できる、競合を同じように検出する
 - プレイの流れ（§11 シナリオ 7・8 を含む）：ロック、423、奪って起動、オフラインで起動して復帰後に送信
+- 競合のファイルごとの解決（シナリオ 4）、履歴と復元のあとの取得（シナリオ 9）
 
 ## 同期エンジンが Python 版と同じ動作をすることの確認
 
@@ -48,7 +50,7 @@ android/scripts/server-integration.sh
 エミュレーターが無くても画面を確かめられるように、Robolectric で Compose の画面を動かしている
 （`HomeScreenTest`, `TargetEditScreenTest`, `SyncLogScreenTest`）。画面の画像は `app/build/screenshots/` に出る。
 
-## 構成（段階 4 の時点）
+## 構成（段階 5 の時点）
 
 ```
 app/src/main/java/com/emustation/emusync/
@@ -73,6 +75,8 @@ app/src/main/java/com/emustation/emusync/
   data/prefs/TokenCipher.kt    # Android Keystore の AES-GCM 鍵でトークンを暗号化
   ui/home/                     # ホーム（ターゲット一覧、状態、メニュー、プレビュー）
   ui/target/                   # ターゲットの追加・編集（保存前の dry-run）
+  ui/conflict/                 # 競合（手元とサーバーを並べ、ファイルごと・一括で解決）
+  ui/history/                  # 履歴（ファイル → 版の一覧 → この版に戻す → 取得）
   ui/log/                      # 同期ログ
   ui/settings/                 # 設定画面
   AppContainer.kt, EmusyncApp.kt, MainActivity.kt

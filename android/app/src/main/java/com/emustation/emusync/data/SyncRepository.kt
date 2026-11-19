@@ -71,6 +71,7 @@ class SyncRepository(
         prefer: Prefer? = null,
         dryRun: Boolean = false,
         log: Boolean = true,
+        only: Set<String>? = null,
     ): SyncOutcome {
         val startedAt = clock()
         val outcome = try {
@@ -83,18 +84,8 @@ class SyncRepository(
                     appDir(),
                     mutexes = mutexes,
                 )
-                val r = engine.sync(target.toSyncTarget(), mode, prefer, dryRun)
-                if (!dryRun) {
-                    db.conflicts().replaceTarget(
-                        target.name,
-                        r.conflicts.map {
-                            ConflictEntity(
-                                target.name, it.rel, it.kind.name, it.serverVersion,
-                                it.serverSha256, it.savedCopyPath, clock(),
-                            )
-                        },
-                    )
-                }
+                val r = engine.sync(target.toSyncTarget(), mode, prefer, dryRun, only)
+                if (!dryRun) recordConflicts(target.name, r, only)
                 SyncOutcome.Done(r)
             }
         } catch (e: CancellationException) {
@@ -121,6 +112,22 @@ class SyncRepository(
             )
         }
         return outcome
+    }
+
+    /**
+     * 競合の記録を更新する。[only] を指定した同期では、そのファイルの分だけを置き換える。
+     * 解消した競合のサーバー版のコピー（conflicts/ の *.server-v<版>）は消す（サーバーの履歴に残っている）
+     */
+    private suspend fun recordConflicts(target: String, r: SyncResult, only: Set<String>?) {
+        val before = db.conflicts().getAll(target).filter { only == null || it.rel in only }
+        val rows = r.conflicts.map {
+            ConflictEntity(target, it.rel, it.kind.name, it.serverVersion, it.serverSha256, it.savedCopyPath, clock())
+        }
+        if (only == null) db.conflicts().replaceTarget(target, rows) else db.conflicts().replaceRels(target, only, rows)
+        val kept = rows.mapNotNull { it.savedCopyPath }.toSet()
+        withContext(Dispatchers.IO) {
+            before.mapNotNull { it.savedCopyPath }.filter { it !in kept }.forEach { File(it).delete() }
+        }
     }
 
     /** 同期を始める前の確認。問題があれば文言を返す */

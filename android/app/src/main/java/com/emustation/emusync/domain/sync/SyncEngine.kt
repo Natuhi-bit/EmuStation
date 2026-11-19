@@ -44,14 +44,18 @@ class SyncEngine(
      *
      * 走査と manifest の取得に失敗したときは例外を投げる（Python 版と同じ）。
      * ファイルごとの失敗は [SyncResult.errors] に入れて、ほかのファイルの処理を続ける。
+     *
+     * @param only 指定すると、その相対パスだけを処理する（競合の画面でファイルごとに解決するため。
+     *   Android 版で追加）。1ファイルごとの判定は変わらない。ほかのファイルの base はそのまま残す
      */
     suspend fun sync(
         target: SyncTarget,
         mode: SyncMode = SyncMode.SYNC,
         prefer: Prefer? = null,
         dryRun: Boolean = false,
+        only: Set<String>? = null,
     ): SyncResult = mutexes.of(target.name).withLock {
-        withContext(io) { Run(target, mode, prefer, dryRun).execute() }
+        withContext(io) { Run(target, mode, prefer, dryRun, only).execute() }
     }
 
     private inner class Run(
@@ -59,6 +63,7 @@ class SyncEngine(
         val mode: SyncMode,
         val prefer: Prefer?,
         val dryRun: Boolean,
+        val only: Set<String>?,
     ) {
         val prefix = t.name + "/"
         val stamp: String = now().format(STAMP)
@@ -76,7 +81,8 @@ class SyncEngine(
             val remoteFiles = remote.manifest(prefix)
             base += baseStore.load(t.name)
 
-            for (rel in (local.keys + remoteFiles.keys).sortedWith(CODE_POINT_ORDER)) {
+            val rels = (local.keys + remoteFiles.keys).filter { only == null || it in only }
+            for (rel in rels.sortedWith(CODE_POINT_ORDER)) {
                 try {
                     decide(rel, local[rel], remoteFiles[rel])
                 } catch (e: CancellationException) {

@@ -89,6 +89,15 @@ data class LockInfo(
 @Serializable
 private data class LocksResponse(val locks: List<LockInfo>)
 
+/** 履歴と復元（設計書 §3.4） */
+interface HistoryApi {
+    /** 新しい順 */
+    suspend fun history(path: String): List<HistoryVersion>
+
+    /** 過去の版 [version] の内容を新しい版として最新にする。返り値は新しい版。なければ 404（[ApiException.Http]） */
+    suspend fun restore(path: String, version: Int): Int
+}
+
 /** プレイ中ロック（設計書 §3.5）。PlaySessionManager が使う */
 interface PlayLocks {
     /** 他の端末が保持していれば [ApiException.Locked423] */
@@ -107,7 +116,7 @@ class EmusyncApi(
     baseUrl: String,
     token: String,
     private val client: OkHttpClient,
-) : RemoteApi, PlayLocks {
+) : RemoteApi, PlayLocks, HistoryApi {
     private val base: String = normalizeBaseUrl(baseUrl)
         ?: throw IllegalArgumentException("不正なサーバー URL: $baseUrl")
     private val authHeader: String = "Bearer ${token.trim()}"
@@ -175,11 +184,11 @@ class EmusyncApi(
     }
 
     /** `GET /api/history/{path}`（新しい順） */
-    suspend fun history(path: String): List<HistoryVersion> =
+    override suspend fun history(path: String): List<HistoryVersion> =
         send(get(url("history", path))) { decode<HistoryResponse>(it) }.versions
 
     /** `POST /api/restore/{path}`。返り値は新しくできた版 */
-    suspend fun restore(path: String, version: Int): Int {
+    override suspend fun restore(path: String, version: Int): Int {
         val body = buildJsonObject { put("version", version) }.toString().toRequestBody(JSON)
         return send(Request.Builder().url(url("restore", path)).post(body).build()) {
             decode<RestoreResponse>(it)

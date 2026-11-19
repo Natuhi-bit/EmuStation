@@ -1,5 +1,6 @@
 package com.emustation.emusync.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,6 +93,10 @@ interface HomeActions {
     fun dismissPlayDialog()
     fun finishPlay(target: String)
     fun keepPlaying()
+
+    // ---- 競合・履歴（設計書 §6.4, §6.5）
+    fun openConflicts(target: String)
+    fun openHistory(target: String)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -309,6 +314,16 @@ private fun TargetCard(row: TargetRow, actions: HomeActions) {
                         if (row.playingHere) item(R.string.action_finish_play) { actions.finishPlay(row.name) }
                         item(R.string.action_preview) { actions.preview(row.name) }
                         HorizontalDivider()
+                        if (row.statuses.any { it is TargetStatus.Conflicts }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_open_conflicts)) },
+                                onClick = { menu = false; actions.openConflicts(row.name) },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_history)) },
+                            onClick = { menu = false; actions.openHistory(row.name) },
+                        )
                         item(R.string.action_edit) { actions.edit(row.name) }
                     }
                 }
@@ -316,7 +331,9 @@ private fun TargetCard(row: TargetRow, actions: HomeActions) {
             if (row.statuses.isNotEmpty()) {
                 Spacer(Modifier.size(8.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.statuses.forEach { StatusChip(it) }
+                    row.statuses.forEach { st ->
+                        StatusChip(st, onClick = if (st is TargetStatus.Conflicts) ({ actions.openConflicts(row.name) }) else null)
+                    }
                 }
             }
             if (row.running) {
@@ -332,7 +349,7 @@ private fun TargetCard(row: TargetRow, actions: HomeActions) {
 }
 
 @Composable
-private fun StatusChip(status: TargetStatus) {
+private fun StatusChip(status: TargetStatus, onClick: (() -> Unit)? = null) {
     val c = MaterialTheme.colorScheme
     val (text, bg, fg) = when (status) {
         TargetStatus.Synced -> Triple(stringResource(R.string.status_synced), c.primaryContainer, c.onPrimaryContainer)
@@ -346,7 +363,12 @@ private fun StatusChip(status: TargetStatus) {
         is TargetStatus.ScanFailed -> Triple(stringResource(R.string.status_scan_failed), c.errorContainer, c.onErrorContainer)
         TargetStatus.Disabled -> Triple(stringResource(R.string.status_disabled), c.surfaceVariant, c.onSurfaceVariant)
     }
-    Surface(shape = RoundedCornerShape(8.dp), color = bg, contentColor = fg) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = bg,
+        contentColor = fg,
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+    ) {
         Text(text, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
     }
 }
@@ -436,7 +458,13 @@ private fun PlayDialogs(d: PlayDialog, actions: HomeActions) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { actions.abortPlay(d.target) }) { Text(stringResource(R.string.action_stop)) }
+                Row {
+                    // 競合の画面へ。ロックは解除しておく（解決してから、もう一度「遊ぶ」）
+                    TextButton(onClick = { actions.abortPlay(d.target); actions.openConflicts(d.target) }) {
+                        Text(stringResource(R.string.action_open_conflicts))
+                    }
+                    TextButton(onClick = { actions.abortPlay(d.target) }) { Text(stringResource(R.string.action_stop)) }
+                }
             },
         )
         is PlayDialog.Error -> AlertDialog(

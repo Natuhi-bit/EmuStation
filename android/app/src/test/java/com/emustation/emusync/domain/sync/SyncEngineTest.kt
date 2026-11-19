@@ -181,5 +181,27 @@ class SyncEngineTest {
         assertEquals("W", File(c.savedCopyPath!!).readText())
         assertTrue(c.savedCopyPath!!.endsWith("conflicts/psp/f.bin.server-v2"))
     }
-}
 
+    @Test
+    fun only_processesListedFiles_andKeepsOtherBase() {
+        local("a.bin", "a")
+        local("b.bin", "b")
+        sync()
+        local("a.bin", "a2")
+        local("b.bin", "b2")
+        remote("c.bin", "c", 1)
+
+        val r = runBlocking { engine().sync(target, only = setOf("a.bin", "nope.bin")) }
+        assertEquals(listOf("a.bin"), r.uploaded)
+        assertEquals(emptyList<String>(), r.downloaded)
+        assertFalse(File(root, "c.bin").exists())
+        // ほかのファイルの base は残る（b は前回の版のまま）
+        val base = baseStore.data["psp"]!!
+        assertEquals(BaseEntry(sha256("a2"), 2), base["a.bin"])
+        assertEquals(BaseEntry(sha256("b"), 1), base["b.bin"])
+        // 残りは次の同期で処理される
+        val rest = sync()
+        assertEquals(listOf("b.bin"), rest.uploaded)
+        assertEquals(listOf("c.bin"), rest.downloaded)
+    }
+}

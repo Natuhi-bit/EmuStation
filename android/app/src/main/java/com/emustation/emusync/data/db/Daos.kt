@@ -92,8 +92,21 @@ interface ConflictDao {
     @Query("SELECT target, COUNT(*) AS count FROM conflicts GROUP BY target")
     fun observeCounts(): Flow<List<TargetCount>>
 
+    @Query("SELECT * FROM conflicts WHERE target = :target ORDER BY rel")
+    suspend fun getAll(target: String): List<ConflictEntity>
+
     @Query("DELETE FROM conflicts WHERE target = :target")
     suspend fun deleteTarget(target: String)
+
+    @Query("DELETE FROM conflicts WHERE target = :target AND rel IN (:rels)")
+    suspend fun deleteRels(target: String, rels: Collection<String>)
+
+    /** [rels] の分だけを置き換える（ファイルごとに解決したとき） */
+    @Transaction
+    suspend fun replaceRels(target: String, rels: Collection<String>, rows: List<ConflictEntity>) {
+        deleteRels(target, rels)
+        insertAll(rows)
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(rows: List<ConflictEntity>)

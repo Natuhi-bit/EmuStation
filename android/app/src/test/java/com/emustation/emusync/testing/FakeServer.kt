@@ -1,6 +1,8 @@
 package com.emustation.emusync.testing
 
 import com.emustation.emusync.data.api.ApiException
+import com.emustation.emusync.data.api.HistoryApi
+import com.emustation.emusync.data.api.HistoryVersion
 import com.emustation.emusync.data.api.LockInfo
 import com.emustation.emusync.data.api.PlayLocks
 import com.emustation.emusync.data.storage.toHex
@@ -27,6 +29,9 @@ class FakeServer {
     }
 
     private val files = sortedMapOf<String, Entry>()
+
+    /** 版の履歴（server/app.py の versions テーブル） */
+    private val versions = mutableMapOf<String, MutableList<Entry>>()
     private var clock = 1_763_560_000.0
 
     /** 送信の記録（path, If-Match） */
@@ -43,7 +48,26 @@ class FakeServer {
 
     @Synchronized
     fun seed(path: String, data: ByteArray, version: Int, device: String = "seed") {
-        files[path] = Entry(data, version, device, clock++)
+        val e = Entry(data, version, device, clock++)
+        files[path] = e
+        versions.getOrPut(path) { mutableListOf() } += e
+    }
+
+    fun history(device: String): HistoryApi = object : HistoryApi {
+        override suspend fun history(path: String): List<HistoryVersion> = synchronized(this@FakeServer) {
+            versions[path].orEmpty().sortedByDescending { it.version }
+                .map { HistoryVersion(it.version, it.sha256, it.data.size.toLong(), it.updatedAt, it.device) }
+        }
+
+        override suspend fun restore(path: String, version: Int): Int = synchronized(this@FakeServer) {
+            val old = versions[path]?.firstOrNull { it.version == version }
+            val cur = files[path]
+            if (old == null || cur == null) throw ApiException.Http(404, "その版はありません")
+            val e = Entry(old.data, cur.version + 1, "$device(restore v$version)", clock++)
+            files[path] = e
+            versions.getValue(path) += e
+            e.version
+        }
     }
 
     // ---------------------------------------------------------------- ロック（server/app.py と同じ規則）
@@ -108,7 +132,9 @@ class FakeServer {
                 val current = cur?.version ?: 0
                 if (current != baseVersion) return UploadOutcome.Rejected(current, cur?.sha256)
                 if (cur != null && cur.sha256 == sha) return UploadOutcome.Ok(current, sha, unchanged = true)
-                files[path] = Entry(data, current + 1, device, clock++)
+                val e = Entry(data, current + 1, device, clock++)
+                files[path] = e
+                versions.getOrPut(path) { mutableListOf() } += e
                 return UploadOutcome.Ok(current + 1, sha, unchanged = false)
             }
         }
