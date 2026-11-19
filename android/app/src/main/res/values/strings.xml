@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">emusync</string>
+
+    <!-- 設定画面 -->
+    <string name="settings_title">設定</string>
+    <string name="section_server">サーバー</string>
+    <string name="label_server_url">サーバー URL</string>
+    <string name="hint_server_url">https://ubuntu-server/emusync</string>
+    <string name="label_token">トークン</string>
+    <string name="cd_show_token">トークンを表示</string>
+    <string name="cd_hide_token">トークンを隠す</string>
+    <string name="warn_token_unreadable">保存したトークンを読み出せませんでした。もう一度入力してください</string>
+    <string name="action_save">保存</string>
+    <string name="action_test_connection">接続テスト</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_delete">削除</string>
+    <string name="action_grant">許可する</string>
+    <string name="testing">接続しています…</string>
+    <string name="msg_saved">保存しました</string>
+
+    <!-- 入力エラー -->
+    <string name="err_url_invalid">サーバー URL が正しくありません（例 https://ubuntu-server/emusync）</string>
+    <string name="err_token_empty">トークンを入力してください</string>
+    <string name="err_token_chars">トークンに使えない文字が含まれています</string>
+
+    <!-- 接続テストの結果 -->
+    <string name="conn_ok">接続できました（端末名: %1$s）</string>
+    <string name="conn_unauthorized">トークンが無効です。サーバーで発行したトークンを確認してください</string>
+    <string name="conn_offline">サーバーにつながりません。VPN（Tailscale）を確認してください</string>
+    <string name="conn_server_down">サーバーにつながりません（HTTP %1$d）。emusync サーバーが止まっている可能性があります</string>
+    <string name="conn_tls_untrusted">サーバーの証明書を信頼できません。自己署名の証明書なら、CA 証明書を取り込んでください</string>
+    <string name="conn_tls_hostname">サーバーの証明書のホスト名が、サーバー URL と一致しません</string>
+    <string name="conn_tls_other">TLS の接続に失敗しました: %1$s</string>
+    <string name="conn_http_404">API が見つかりません（HTTP 404）。サーバー URL を確認してください（例 https://ubuntu-server/emusync。末尾に /api は付けません）</string>
+    <string name="conn_http_403">アクセスが拒否されました（HTTP 403）。Nginx の allow の設定を確認してください</string>
+    <string name="conn_http">サーバーがエラーを返しました（HTTP %1$d）: %2$s</string>
+    <string name="conn_network">通信エラー: %1$s</string>
+    <string name="conn_protocol">サーバーの応答を読めません。サーバー URL を確認してください</string>
+    <string name="conn_unknown">エラー: %1$s</string>
+
+    <!-- CA 証明書 -->
+    <string name="section_ca">CA 証明書</string>
+    <string name="ca_none">取り込んでいません。OS 標準の信頼ストアを使います</string>
+    <string name="ca_unreadable">取り込んだ証明書を読み出せません。取り込み直してください</string>
+    <string name="ca_help">サーバーの証明書が自己署名の場合は、その CA 証明書（.crt / .pem）を取り込んでください。取り込むと、その CA だけを信頼します</string>
+    <string name="action_import_ca">証明書を取り込む</string>
+    <string name="action_reimport_ca">取り込み直す</string>
+    <string name="ca_subject">発行先</string>
+    <string name="ca_issuer">発行者</string>
+    <string name="ca_validity">有効期間</string>
+    <string name="ca_validity_value">%1$s 〜 %2$s</string>
+    <string name="ca_expired">この証明書は期限切れです</string>
+    <string name="ca_fingerprint">SHA-256 指紋</string>
+    <string name="ca_extra">ほかに %1$d 個の証明書も信頼します</string>
+    <string name="ca_delete_title">CA 証明書を削除しますか？</string>
+    <string name="ca_delete_message">削除すると、OS 標準の信頼ストアを使います</string>
+    <string name="msg_ca_imported">CA 証明書を取り込みました</string>
+    <string name="msg_ca_deleted">CA 証明書を削除しました</string>
+    <string name="err_ca_invalid">証明書として読み込めませんでした（PEM または DER 形式の .crt / .pem を選んでください）</string>
+
+    <!-- 権限 -->
+    <string name="section_permissions">権限</string>
+    <string name="perm_all_files">すべてのファイルへのアクセス</string>
+    <string name="perm_notifications">通知</string>
+    <string name="perm_granted">許可されています</string>
+    <string name="perm_denied">許可されていません</string>
+</resources>
