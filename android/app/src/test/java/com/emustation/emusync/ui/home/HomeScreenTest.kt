@@ -1,6 +1,8 @@
 package com.emustation.emusync.ui.home
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -41,6 +43,14 @@ class HomeScreenTest {
         override fun requestAllFilesAccess() { calls += "allFiles" }
         override fun requestNotificationPermission() { calls += "notifications" }
         override fun dismissPreview() { calls += "dismissPreview" }
+        override fun play(target: String) { calls += "play $target" }
+        override fun playForce(target: String) { calls += "playForce $target" }
+        override fun playOffline(target: String) { calls += "playOffline $target" }
+        override fun playIgnoringConflicts(target: String) { calls += "playIgnoringConflicts $target" }
+        override fun abortPlay(target: String) { calls += "abortPlay $target" }
+        override fun dismissPlayDialog() { calls += "dismissPlayDialog" }
+        override fun finishPlay(target: String) { calls += "finishPlay $target" }
+        override fun keepPlaying() { calls += "keepPlaying" }
     }
 
     private val time = 1_763_560_000_000L
@@ -126,5 +136,95 @@ class HomeScreenTest {
         compose.onNode(isDialog()).saveScreenshot("home-preview")
         compose.onNodeWithText("閉じる").performClick()
         assertEquals(listOf("dismissPreview"), calls)
+    }
+
+    // ---------------------------------------------------------------- 遊ぶ
+
+    private val playingRows = listOf(
+        rows[0].copy(statuses = listOf(TargetStatus.PlayingHere, TargetStatus.Unsent(1)), playingHere = true),
+        rows[2],
+    )
+
+    @Test
+    fun playButton_andFinishButtonWhilePlaying() {
+        show(HomeUiState(loaded = true, server = ServerState.Connected("p"), rows = playingRows))
+        compose.onNodeWithTag("play-ps3").performClick()
+        compose.onNodeWithTag("finish-psp").performClick()
+        // プレイ中は、取得するメニューを選べない
+        compose.onNodeWithTag("menu-psp").performClick()
+        compose.onNodeWithText("今すぐ同期").assertIsNotEnabled()
+        compose.onNodeWithText("取得のみ").assertIsNotEnabled()
+        compose.onNodeWithText("送信のみ").assertIsEnabled()
+        compose.onRoot().saveScreenshot("home-playing-menu")
+        assertEquals(listOf("play ps3", "finishPlay psp"), calls)
+    }
+
+    @Test
+    fun lockedByOtherDialog() {
+        show(
+            HomeUiState(
+                loaded = true, server = ServerState.Connected("p"), rows = rows,
+                play = PlayDialog.LockedByOther("ps2", "PS2", "win-laptop", 1_763_600_000.0),
+            ),
+        )
+        compose.onNodeWithText("win-laptop がプレイ中").assertIsDisplayed()
+        compose.onNode(isDialog()).saveScreenshot("play-locked")
+        compose.onNodeWithText("奪って起動").performClick()
+        assertEquals(listOf("playForce ps2"), calls)
+    }
+
+    @Test
+    fun unreachableDialog() {
+        show(
+            HomeUiState(
+                loaded = true, server = ServerState.Connected("p"), rows = rows,
+                play = PlayDialog.Unreachable("psp", "PSP", UiText(R.string.conn_offline)),
+            ),
+        )
+        compose.onNodeWithText("サーバーにつながりません。VPN（Tailscale）を確認してください").assertIsDisplayed()
+        compose.onNode(isDialog()).saveScreenshot("play-unreachable")
+        compose.onNodeWithText("同期せずに起動").performClick()
+        assertEquals(listOf("playOffline psp"), calls)
+    }
+
+    @Test
+    fun conflictsDialog() {
+        val r = SyncResult(
+            "ps3", SyncMode.SYNC, null, false, emptyList(), listOf("BLUS30443/ICON0.PNG"),
+            listOf(SyncConflict("BLUS30443/SAVE.DAT", SyncConflict.Kind.BOTH_CHANGED, 3, "x", "/c")), emptyList(),
+        )
+        show(HomeUiState(loaded = true, server = ServerState.Connected("p"), rows = rows, play = PlayDialog.Conflicts("ps3", "PS3", r)))
+        compose.onNodeWithText("競合が 1 件あります").assertIsDisplayed()
+        compose.onNode(isDialog()).saveScreenshot("play-conflicts")
+        compose.onNodeWithText("やめる").performClick()
+        compose.onNodeWithText("無視して起動").performClick()
+        assertEquals(listOf("abortPlay ps3", "playIgnoringConflicts ps3"), calls)
+    }
+
+    @Test
+    fun progressAndErrorDialogs() {
+        show(
+            HomeUiState(
+                loaded = true, server = ServerState.Connected("p"), rows = rows,
+                play = PlayDialog.Progress("psp", "PSP", com.emustation.emusync.domain.play.PlayStep.SYNCING),
+            ),
+        )
+        compose.mainClock.autoAdvance = false // 進み具合の丸が回り続けるので、時計を止めて確かめる
+        compose.onNodeWithText("セーブを同期しています…").assertExists()
+    }
+
+    @Test
+    fun resumePrompt() {
+        show(
+            HomeUiState(
+                loaded = true, server = ServerState.Connected("p"), rows = playingRows,
+                resumePrompt = ResumePrompt("psp", "PSP", 1_763_560_000_000L, online = true),
+            ),
+        )
+        compose.onNodeWithText("PSP のセーブを送信しますか？").assertIsDisplayed()
+        compose.onNode(isDialog()).saveScreenshot("resume-prompt")
+        compose.onNodeWithText("まだ遊ぶ").performClick()
+        compose.onNodeWithText("送信").performClick()
+        assertEquals(listOf("keepPlaying", "finishPlay psp"), calls)
     }
 }

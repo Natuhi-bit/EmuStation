@@ -2,6 +2,7 @@ package com.emustation.emusync.ui.home
 
 import com.emustation.emusync.data.LocalState
 import com.emustation.emusync.data.api.LockInfo
+import com.emustation.emusync.domain.play.PlayStep
 import com.emustation.emusync.domain.sync.SyncResult
 import com.emustation.emusync.ui.common.UiText
 
@@ -40,7 +41,36 @@ data class TargetRow(
     val lastSyncAt: Long?,
     val statuses: List<TargetStatus>,
     val running: Boolean,
+    /** この端末でプレイ中（プレイセッションがある） */
+    val playingHere: Boolean = false,
 )
+
+/** 「遊ぶ」の途中で出すダイアログ（設計書 §5.1） */
+sealed interface PlayDialog {
+    val target: String
+    val machine: String
+
+    data class Progress(override val target: String, override val machine: String, val step: PlayStep) : PlayDialog
+
+    /** 423。[やめる] / [奪って起動] */
+    data class LockedByOther(
+        override val target: String,
+        override val machine: String,
+        val device: String,
+        val expiresAt: Double,
+    ) : PlayDialog
+
+    /** サーバーにつながらない。[同期せずに起動] / [やめる] */
+    data class Unreachable(override val target: String, override val machine: String, val message: UiText) : PlayDialog
+
+    /** 競合が出た。[無視して起動] / [やめる] */
+    data class Conflicts(override val target: String, override val machine: String, val result: SyncResult) : PlayDialog
+
+    data class Error(override val target: String, override val machine: String, val message: UiText) : PlayDialog
+}
+
+/** アプリに戻ってきたときの「送信しますか？」（設計書 §5.2） */
+data class ResumePrompt(val target: String, val machine: String, val startedAt: Long, val online: Boolean)
 
 sealed interface PreviewState {
     val machine: String
@@ -57,6 +87,8 @@ data class HomeUiState(
     val hasAllFilesAccess: Boolean = true,
     val hasNotificationPermission: Boolean = true,
     val preview: PreviewState? = null,
+    val play: PlayDialog? = null,
+    val resumePrompt: ResumePrompt? = null,
 )
 
 /** 1つのターゲットの状態を組み立てる */

@@ -113,4 +113,44 @@
     <string name="sync_log_hint">直近 100 回の同期の結果</string>
     <string name="sync_log_empty">まだ同期していません</string>
     <string name="action_open_log">同期ログを見る</string>
+
+    <!-- 遊ぶ（設計書 §5） -->
+    <string name="action_play">遊ぶ</string>
+    <string name="action_finish_play">送信して終了</string>
+    <string name="action_play_force">奪って起動</string>
+    <string name="action_play_offline">同期せずに起動</string>
+    <string name="action_play_ignore_conflicts">無視して起動</string>
+    <string name="action_stop">やめる</string>
+    <string name="action_send">送信</string>
+    <string name="action_keep_playing">まだ遊ぶ</string>
+    <string name="action_retry">再試行</string>
+    <string name="play_title">%1$s を起動します</string>
+    <string name="play_step_finishing">前回のプレイの送信を終えています…</string>
+    <string name="play_step_locking">ロックを取得しています…</string>
+    <string name="play_step_syncing">セーブを同期しています…</string>
+    <string name="play_locked_title">%1$s がプレイ中</string>
+    <string name="play_locked_text">%1$s が %2$s をプレイ中です（ロックの期限: %3$s）。向こうで終わってから起動してください。奪って起動すると、向こうのセーブと競合するおそれがあります</string>
+    <string name="play_unreachable_title">サーバーにつながりません</string>
+    <string name="play_unreachable_text">VPN（Tailscale）を確認してください。同期せずに起動しますか？ 遊び終わったら、つながるときに送信します</string>
+    <string name="play_conflicts_title">競合が %1$d 件あります</string>
+    <string name="play_conflicts_text">手元とサーバーの両方で変わったファイルがあるので、起動を止めました。何も上書きしていません。無視して起動すると、手元のセーブで遊びます</string>
+    <string name="play_error_title">%1$s を起動できません</string>
+    <string name="resume_title">%1$s のセーブを送信しますか？</string>
+    <string name="resume_text">%1$s からプレイ中です。エミュを終了してから送信してください（エミュが動いたままだと、セーブを書き込み中かもしれません）</string>
+    <string name="resume_text_offline">%1$s から、同期せずにプレイ中です。エミュを終了してから送信してください（エミュが動いたままだと、セーブを書き込み中かもしれません）</string>
+    <string name="err_emu_not_set">エミュのアプリが設定されていません。ターゲットの編集で選んでください</string>
+    <string name="err_emu_missing">エミュのアプリが見つかりません（アンインストールされた可能性があります）</string>
+    <string name="err_previous_finish_failed">前回のプレイのセーブを送信できませんでした。%1$s</string>
+    <string name="err_some_files_failed">%1$d 件のファイルを送信できませんでした。同期ログを確認してください</string>
+    <string name="err_playing_no_pull">この端末でプレイ中のため、取得しません。エミュを終了して「送信して終了」を押してください</string>
+    <string name="channel_play">プレイ中</string>
+    <string name="channel_result">送信の結果</string>
+    <string name="notif_playing">%1$s プレイ中</string>
+    <string name="notif_playing_text">遊び終わったら、エミュを終了してから [送信して終了] を押してください</string>
+    <string name="notif_playing_offline_text">同期せずに起動しました。遊び終わったら、エミュを終了してから [送信して終了] を押してください（サーバーにつながるときに送信します）</string>
+    <string name="notif_finishing">%1$s のセーブを送信しています</string>
+    <string name="notif_finished">%1$s: 送信しました</string>
+    <string name="notif_finished_conflicts">%1$s: 競合が %2$d 件あります</string>
+    <string name="notif_finished_conflicts_text">%1$s。競合のファイルは送信していません。アプリで確認してください</string>
+    <string name="notif_finish_failed">%1$s: 送信できませんでした</string>
 </resources>

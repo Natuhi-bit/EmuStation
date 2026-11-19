@@ -10,6 +10,7 @@ import com.emustation.emusync.data.db.AppDatabase
 import com.emustation.emusync.data.prefs.AppSettings
 import com.emustation.emusync.data.prefs.KeystoreTokenCipher
 import com.emustation.emusync.data.prefs.SettingsStore
+import com.emustation.emusync.domain.play.PlaySessionManager
 import com.emustation.emusync.ui.settings.Permissions
 import java.io.File
 
@@ -44,6 +45,19 @@ class AppContainer(context: Context) {
             appDir = ::appDir,
             hasStorageAccess = Permissions::hasAllFilesAccess,
             resolve = { it.resolve(appContext) },
+        )
+    }
+
+    val playSessionManager: PlaySessionManager by lazy {
+        PlaySessionManager(
+            targets = db.targets(),
+            sessions = db.playSessions(),
+            sync = syncRepository,
+            locks = {
+                val s = settingsStore.current()
+                // URL やトークンが不正なときも「未設定」と同じに扱う
+                if (s.serverUrl.isBlank() || s.token.isBlank()) null else runCatching { api(s) }.getOrNull()
+            },
         )
     }
 }

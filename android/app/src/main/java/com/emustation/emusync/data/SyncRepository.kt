@@ -27,8 +27,8 @@ import kotlin.coroutines.cancellation.CancellationException
 sealed interface SyncOutcome {
     data class Done(val result: SyncResult) : SyncOutcome
 
-    /** 同期全体が失敗した（つながらない、権限がない など） */
-    data class Failed(val message: UiText) : SyncOutcome
+    /** 同期全体が失敗した（つながらない、権限がない など）。[cause] は通信などの例外 */
+    data class Failed(val message: UiText, val cause: Throwable? = null) : SyncOutcome
 }
 
 /** 手元の状態（ホーム画面の表示用）。通信はしない */
@@ -74,7 +74,7 @@ class SyncRepository(
     ): SyncOutcome {
         val startedAt = clock()
         val outcome = try {
-            preflight(target)?.let { SyncOutcome.Failed(it) } ?: run {
+            preflight(target, mode, dryRun)?.let { SyncOutcome.Failed(it) } ?: run {
                 val s = settings()
                 val engine = SyncEngine(
                     apiFactory(s),
@@ -100,7 +100,7 @@ class SyncRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            SyncOutcome.Failed(connectionErrorText(e))
+            SyncOutcome.Failed(connectionErrorText(e), e)
         }
         if (log) {
             val r = (outcome as? SyncOutcome.Done)?.result
@@ -124,9 +124,13 @@ class SyncRepository(
     }
 
     /** 同期を始める前の確認。問題があれば文言を返す */
-    private suspend fun preflight(t: TargetEntity): UiText? {
+    private suspend fun preflight(t: TargetEntity, mode: SyncMode, dryRun: Boolean): UiText? {
         val s = settings()
         return when {
+            // この端末でプレイ中は取得しない。エミュが開いているファイルを外から書き換えると、
+            // 上書きし返されたり壊れたりするおそれがある（設計書 §5.3）
+            mode.pull && !dryRun && db.playSessions().get(t.name) != null ->
+                UiText(R.string.err_playing_no_pull)
             s.serverUrl.isBlank() || s.token.isBlank() -> UiText(R.string.err_server_not_configured)
             !hasStorageAccess() -> UiText(R.string.err_no_storage_access)
             // データフォルダがない（SD カードが抜けている、設定が違う など）ときは、

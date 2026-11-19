@@ -107,6 +107,14 @@ private fun HomeRouteScreen(app: EmusyncApp, nav: NavController) {
                 }
             }
             override fun dismissPreview() = vm.dismissPreview()
+            override fun play(target: String) = vm.play(target)
+            override fun playForce(target: String) = vm.playForce(target)
+            override fun playOffline(target: String) = vm.playOffline(target)
+            override fun playIgnoringConflicts(target: String) = vm.playIgnoringConflicts(target)
+            override fun abortPlay(target: String) = vm.abortPlay(target)
+            override fun dismissPlayDialog() = vm.dismissPlayDialog()
+            override fun finishPlay(target: String) = vm.finishPlay(target)
+            override fun keepPlaying() = vm.keepPlaying()
         }
     }
     HomeContent(state, actions, snackbar)

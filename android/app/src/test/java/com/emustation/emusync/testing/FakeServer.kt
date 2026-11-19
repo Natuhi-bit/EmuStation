@@ -1,6 +1,8 @@
 package com.emustation.emusync.testing
 
 import com.emustation.emusync.data.api.ApiException
+import com.emustation.emusync.data.api.LockInfo
+import com.emustation.emusync.data.api.PlayLocks
 import com.emustation.emusync.data.storage.toHex
 import com.emustation.emusync.domain.sync.BaseEntry
 import com.emustation.emusync.domain.sync.BaseStateStore
@@ -44,6 +46,36 @@ class FakeServer {
         files[path] = Entry(data, version, device, clock++)
     }
 
+    // ---------------------------------------------------------------- ロック（server/app.py と同じ規則）
+    private val lockTable = mutableMapOf<String, Pair<String, Double>>()
+    var now: () -> Double = { System.currentTimeMillis() / 1000.0 }
+
+    /** ロックの操作の記録（device, 操作） */
+    val lockLog = mutableListOf<String>()
+
+    @Synchronized
+    fun lockHolder(target: String): String? = lockTable[target]?.takeIf { it.second > now() }?.first
+
+    fun locks(device: String): PlayLocks = object : PlayLocks {
+        override suspend fun lock(target: String, ttlSeconds: Int, force: Boolean): LockInfo =
+            synchronized(this@FakeServer) {
+                lockLog += "$device lock $target ttl=$ttlSeconds force=$force"
+                val cur = lockTable[target]
+                if (cur != null && cur.first != device && cur.second > now() && !force) {
+                    throw ApiException.Locked423("${cur.first} がプレイ中です", cur.first, cur.second)
+                }
+                val exp = now() + ttlSeconds
+                lockTable[target] = device to exp
+                LockInfo(target, device, exp)
+            }
+
+        override suspend fun unlock(target: String) = synchronized(this@FakeServer) {
+            lockLog += "$device unlock $target"
+            if (lockTable[target]?.first == device) lockTable.remove(target)
+            Unit
+        }
+    }
+
     fun client(device: String): RemoteApi = object : RemoteApi {
         override suspend fun manifest(prefix: String): Map<String, RemoteFile> {
             val m = synchronized(this@FakeServer) {
@@ -81,6 +113,16 @@ class FakeServer {
             }
         }
     }
+}
+
+/** サーバーにつながらない状態の偽物 */
+object OfflineRemote : RemoteApi, PlayLocks {
+    private fun down(): Nothing = throw ApiException.Offline("connect failed", java.net.ConnectException("refused"))
+    override suspend fun manifest(prefix: String): Map<String, RemoteFile> = down()
+    override suspend fun download(path: String, out: OutputStream, version: Int?): Downloaded = down()
+    override suspend fun upload(path: String, content: UploadContent, baseVersion: Int): UploadOutcome = down()
+    override suspend fun lock(target: String, ttlSeconds: Int, force: Boolean): LockInfo = down()
+    override suspend fun unlock(target: String): Unit = down()
 }
 
 class InMemoryBaseStateStore : BaseStateStore {

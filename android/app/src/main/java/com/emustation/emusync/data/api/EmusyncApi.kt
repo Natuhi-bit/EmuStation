@@ -89,6 +89,15 @@ data class LockInfo(
 @Serializable
 private data class LocksResponse(val locks: List<LockInfo>)
 
+/** プレイ中ロック（設計書 §3.5）。PlaySessionManager が使う */
+interface PlayLocks {
+    /** 他の端末が保持していれば [ApiException.Locked423] */
+    suspend fun lock(target: String, ttlSeconds: Int = EmusyncApi.DEFAULT_LOCK_TTL, force: Boolean = false): LockInfo
+
+    /** 自分のロックだけを消す */
+    suspend fun unlock(target: String)
+}
+
 /**
  * emusync サーバーの HTTP API（設計書 §3）。
  *
@@ -98,7 +107,7 @@ class EmusyncApi(
     baseUrl: String,
     token: String,
     private val client: OkHttpClient,
-) : RemoteApi {
+) : RemoteApi, PlayLocks {
     private val base: String = normalizeBaseUrl(baseUrl)
         ?: throw IllegalArgumentException("不正なサーバー URL: $baseUrl")
     private val authHeader: String = "Bearer ${token.trim()}"
@@ -178,7 +187,7 @@ class EmusyncApi(
     }
 
     /** `POST /api/locks/{target}`。他の端末が保持していれば [ApiException.Locked423] */
-    suspend fun lock(target: String, ttlSeconds: Int = DEFAULT_LOCK_TTL, force: Boolean = false): LockInfo {
+    override suspend fun lock(target: String, ttlSeconds: Int, force: Boolean): LockInfo {
         val body = buildJsonObject {
             put("ttl", ttlSeconds)
             put("force", force)
@@ -187,7 +196,7 @@ class EmusyncApi(
     }
 
     /** `DELETE /api/locks/{target}`（自分のロックだけを消す） */
-    suspend fun unlock(target: String) {
+    override suspend fun unlock(target: String) {
         send(Request.Builder().url(url("locks", target)).delete().build()) { }
     }
 

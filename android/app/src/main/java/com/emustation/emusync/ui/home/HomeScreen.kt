@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -34,7 +35,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,6 +64,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.emustation.emusync.R
+import com.emustation.emusync.domain.play.PlayStep
 import com.emustation.emusync.domain.sync.SyncMode
 import com.emustation.emusync.domain.sync.SyncResult
 import com.emustation.emusync.ui.common.AppIcon
@@ -78,6 +82,16 @@ interface HomeActions {
     fun requestAllFilesAccess()
     fun requestNotificationPermission()
     fun dismissPreview()
+
+    // ---- 遊ぶ（設計書 §5）
+    fun play(target: String)
+    fun playForce(target: String)
+    fun playOffline(target: String)
+    fun playIgnoringConflicts(target: String)
+    fun abortPlay(target: String)
+    fun dismissPlayDialog()
+    fun finishPlay(target: String)
+    fun keepPlaying()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,6 +176,8 @@ fun HomeContent(
     }
 
     state.preview?.let { PreviewDialog(it, actions::dismissPreview) }
+    state.play?.let { PlayDialogs(it, actions) }
+    state.resumePrompt?.let { ResumeDialog(it, actions) }
 }
 
 @Composable
@@ -256,21 +272,41 @@ private fun TargetCard(row: TargetRow, actions: HomeActions) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (row.playingHere) {
+                    OutlinedButton(
+                        onClick = { actions.finishPlay(row.name) },
+                        enabled = !row.running,
+                        modifier = Modifier.testTag("finish-${row.name}"),
+                    ) { Text(stringResource(R.string.action_finish_play)) }
+                } else {
+                    FilledTonalButton(
+                        onClick = { actions.play(row.name) },
+                        enabled = !row.running,
+                        modifier = Modifier.testTag("play-${row.name}"),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.action_play))
+                    }
+                }
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.testTag("menu-${row.name}")) {
                         Icon(Icons.Filled.MoreVert, stringResource(R.string.cd_menu))
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         val item = @Composable { label: Int, onClick: () -> Unit ->
+                            // この端末でプレイ中は取得しない（エミュが開いているファイルを書き換えないように）
+                            val pulls = label == R.string.action_sync_now || label == R.string.action_pull_only
                             DropdownMenuItem(
                                 text = { Text(stringResource(label)) },
-                                enabled = !row.running || label == R.string.action_edit,
+                                enabled = (!row.running && !(pulls && row.playingHere)) || label == R.string.action_edit,
                                 onClick = { menu = false; onClick() },
                             )
                         }
                         item(R.string.action_sync_now) { actions.sync(row.name, SyncMode.SYNC) }
                         item(R.string.action_pull_only) { actions.sync(row.name, SyncMode.PULL) }
                         item(R.string.action_push_only) { actions.sync(row.name, SyncMode.PUSH) }
+                        if (row.playingHere) item(R.string.action_finish_play) { actions.finishPlay(row.name) }
                         item(R.string.action_preview) { actions.preview(row.name) }
                         HorizontalDivider()
                         item(R.string.action_edit) { actions.edit(row.name) }
@@ -332,6 +368,105 @@ private fun PreviewDialog(preview: PreviewState, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
+    )
+}
+
+@Composable
+private fun PlayDialogs(d: PlayDialog, actions: HomeActions) {
+    val dismiss = actions::dismissPlayDialog
+    when (d) {
+        is PlayDialog.Progress -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.play_title, d.machine)) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        stringResource(
+                            when (d.step) {
+                                PlayStep.FINISHING_PREVIOUS -> R.string.play_step_finishing
+                                PlayStep.LOCKING -> R.string.play_step_locking
+                                PlayStep.SYNCING -> R.string.play_step_syncing
+                            },
+                        ),
+                    )
+                }
+            },
+            confirmButton = {},
+        )
+        is PlayDialog.LockedByOther -> AlertDialog(
+            onDismissRequest = dismiss,
+            title = { Text(stringResource(R.string.play_locked_title, d.device)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.play_locked_text, d.device, d.machine,
+                        formatDateTime((d.expiresAt * 1000).toLong()),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { actions.playForce(d.target) }) { Text(stringResource(R.string.action_play_force)) }
+            },
+            dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.action_stop)) } },
+        )
+        is PlayDialog.Unreachable -> AlertDialog(
+            onDismissRequest = dismiss,
+            title = { Text(stringResource(R.string.play_unreachable_title)) },
+            text = {
+                Column {
+                    Text(d.message.resolve(), color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.play_unreachable_text))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { actions.playOffline(d.target) }) { Text(stringResource(R.string.action_play_offline)) }
+            },
+            dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.action_stop)) } },
+        )
+        is PlayDialog.Conflicts -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.play_conflicts_title, d.result.conflicts.size)) },
+            text = { SyncResultDetails(d.result, header = stringResource(R.string.play_conflicts_text)) },
+            confirmButton = {
+                TextButton(onClick = { actions.playIgnoringConflicts(d.target) }) {
+                    Text(stringResource(R.string.action_play_ignore_conflicts))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { actions.abortPlay(d.target) }) { Text(stringResource(R.string.action_stop)) }
+            },
+        )
+        is PlayDialog.Error -> AlertDialog(
+            onDismissRequest = dismiss,
+            title = { Text(stringResource(R.string.play_error_title, d.machine)) },
+            text = { Text(d.message.resolve()) },
+            confirmButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.action_close)) } },
+        )
+    }
+}
+
+@Composable
+private fun ResumeDialog(p: ResumePrompt, actions: HomeActions) {
+    AlertDialog(
+        onDismissRequest = actions::keepPlaying,
+        title = { Text(stringResource(R.string.resume_title, p.machine)) },
+        text = {
+            Text(
+                stringResource(
+                    if (p.online) R.string.resume_text else R.string.resume_text_offline,
+                    formatDateTime(p.startedAt),
+                ),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { actions.finishPlay(p.target) }) { Text(stringResource(R.string.action_send)) }
+        },
+        dismissButton = {
+            TextButton(onClick = actions::keepPlaying) { Text(stringResource(R.string.action_keep_playing)) }
+        },
     )
 }
 

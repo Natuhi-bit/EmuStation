@@ -9,7 +9,8 @@
 | 1 | 設定画面、URL とトークンの保存、CA の取り込み、接続テスト | 完了 |
 | 2 | 同期エンジン（UI なし）と単体テスト | 完了 |
 | 3 | ホーム、ターゲット編集、権限の要求、dry-run、手動同期、同期ログ（Room、WorkManager） | 完了 |
-| 4〜6 | プレイの流れ、競合・履歴、定期送信 | 未着手 |
+| 4 | プレイの流れ（ロック、423・オフラインのダイアログ、起動、通知、戻ったときの確認、送信ジョブ） | 完了 |
+| 5〜6 | 競合・履歴・復元の画面、定期送信と仕上げ | 未着手 |
 
 ## ビルド
 
@@ -32,6 +33,7 @@ android/scripts/server-integration.sh
 - ping（正しいトークンで成功、違うトークンで 401、サーバー停止で「つながらない」）、ロック、409、履歴と復元
 - 同期のシナリオ 1〜6（設計書 §11）
 - Python 版クライアント（client/emusync.py）との相互運用：互いに送ったファイルを取得できる、競合を同じように検出する
+- プレイの流れ（§11 シナリオ 7・8 を含む）：ロック、423、奪って起動、オフラインで起動して復帰後に送信
 
 ## 同期エンジンが Python 版と同じ動作をすることの確認
 
@@ -46,7 +48,7 @@ android/scripts/server-integration.sh
 エミュレーターが無くても画面を確かめられるように、Robolectric で Compose の画面を動かしている
 （`HomeScreenTest`, `TargetEditScreenTest`, `SyncLogScreenTest`）。画面の画像は `app/build/screenshots/` に出る。
 
-## 構成（段階 3 の時点）
+## 構成（段階 4 の時点）
 
 ```
 app/src/main/java/com/emustation/emusync/
@@ -63,6 +65,9 @@ app/src/main/java/com/emustation/emusync/
   data/storage/TreeUriPaths.kt # フォルダ選択の URI → 実パス
   data/apps/LauncherApps.kt    # ランチャーアプリの一覧
   domain/Presets.kt            # psp / vita / ps2 / ps3
+  domain/play/PlaySessionManager.kt # §5 のプレイの流れ（ロック → 同期 → 記録、送信して終了）
+  work/Notifications.kt        # プレイ中・結果の通知
+  work/NotificationActionReceiver.kt # 通知の [送信して終了] / [再試行]
   work/SyncWorker.kt           # 手動同期のジョブ（sync-<target>、KEEP、expedited）
   data/prefs/SettingsStore.kt  # DataStore
   data/prefs/TokenCipher.kt    # Android Keystore の AES-GCM 鍵でトークンを暗号化
