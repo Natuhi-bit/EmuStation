@@ -1,0 +1,96 @@
+package com.emustation.emusync.testing
+
+import com.emustation.emusync.data.api.ApiException
+import com.emustation.emusync.data.storage.toHex
+import com.emustation.emusync.domain.sync.BaseEntry
+import com.emustation.emusync.domain.sync.BaseStateStore
+import com.emustation.emusync.domain.sync.Downloaded
+import com.emustation.emusync.domain.sync.RemoteApi
+import com.emustation.emusync.domain.sync.RemoteFile
+import com.emustation.emusync.domain.sync.UploadContent
+import com.emustation.emusync.domain.sync.UploadOutcome
+import java.io.OutputStream
+import java.security.MessageDigest
+
+fun sha256(b: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(b).toHex()
+fun sha256(s: String): String = sha256(s.toByteArray())
+
+/**
+ * server/app.py と同じ規則で動く、メモリ上の偽サーバー。
+ * 端末ごとに [client] を作る（トークンの代わりに端末名を渡す）。
+ */
+class FakeServer {
+    class Entry(val data: ByteArray, val version: Int, val device: String, val updatedAt: Double) {
+        val sha256 = sha256(data)
+    }
+
+    private val files = sortedMapOf<String, Entry>()
+    private var clock = 1_763_560_000.0
+
+    /** 送信の記録（path, If-Match） */
+    val uploadLog = mutableListOf<Pair<String, Int>>()
+
+    /** ここに入れたパスは、取得したときに本文が壊れて届く */
+    val corruptOnDownload = mutableSetOf<String>()
+
+    /** manifest を返したあとに呼ぶ（他の端末が割り込んだ状態を作る） */
+    var afterManifest: (suspend () -> Unit)? = null
+
+    @Synchronized
+    fun get(path: String): Entry? = files[path]
+
+    @Synchronized
+    fun seed(path: String, data: ByteArray, version: Int, device: String = "seed") {
+        files[path] = Entry(data, version, device, clock++)
+    }
+
+    fun client(device: String): RemoteApi = object : RemoteApi {
+        override suspend fun manifest(prefix: String): Map<String, RemoteFile> {
+            val m = synchronized(this@FakeServer) {
+                files.filterKeys { it.startsWith(prefix) }.map { (p, e) ->
+                    val rel = p.removePrefix(prefix)
+                    rel to RemoteFile(rel, e.version, e.sha256, e.data.size.toLong(), e.updatedAt, e.device)
+                }.toMap()
+            }
+            afterManifest?.invoke()
+            return m
+        }
+
+        override suspend fun download(path: String, out: OutputStream, version: Int?): Downloaded {
+            val e = get(path) ?: throw ApiException.Http(404, "ありません")
+            if (path in corruptOnDownload) {
+                out.write(e.data + 0x00)
+                throw ApiException.Protocol("ダウンロード内容が壊れています: $path")
+            }
+            out.write(e.data)
+            return Downloaded(e.version, e.sha256)
+        }
+
+        override suspend fun upload(path: String, content: UploadContent, baseVersion: Int): UploadOutcome {
+            val data = content.open().use { it.readBytes() }
+            val sha = sha256(data)
+            if (sha != content.sha256) throw ApiException.Http(400, "ハッシュ不一致")
+            synchronized(this@FakeServer) {
+                uploadLog += path to baseVersion
+                val cur = files[path]
+                val current = cur?.version ?: 0
+                if (current != baseVersion) return UploadOutcome.Rejected(current, cur?.sha256)
+                if (cur != null && cur.sha256 == sha) return UploadOutcome.Ok(current, sha, unchanged = true)
+                files[path] = Entry(data, current + 1, device, clock++)
+                return UploadOutcome.Ok(current + 1, sha, unchanged = false)
+            }
+        }
+    }
+}
+
+class InMemoryBaseStateStore : BaseStateStore {
+    val data = mutableMapOf<String, Map<String, BaseEntry>>()
+    var saveCount = 0
+
+    override suspend fun load(target: String): Map<String, BaseEntry> = data[target].orEmpty()
+
+    override suspend fun save(target: String, entries: Map<String, BaseEntry>) {
+        saveCount++
+        data[target] = entries
+    }
+}

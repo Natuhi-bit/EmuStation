@@ -1,6 +1,15 @@
 package com.emustation.emusync.data.api
 
+import com.emustation.emusync.data.storage.toHex
+import com.emustation.emusync.domain.sync.Downloaded
+import com.emustation.emusync.domain.sync.RemoteApi
+import com.emustation.emusync.domain.sync.RemoteFile
+import com.emustation.emusync.domain.sync.UploadContent
+import com.emustation.emusync.domain.sync.UploadOutcome
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -9,21 +18,76 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.BufferedSink
+import okio.source
 import java.io.IOException
+import java.io.OutputStream
+import java.security.MessageDigest
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 @Serializable
 data class PingResponse(val ok: Boolean, val device: String, val time: Double)
+
+@Serializable
+data class ManifestEntry(
+    val path: String,
+    val version: Int,
+    val sha256: String,
+    val size: Long,
+    @SerialName("updated_at") val updatedAt: Double,
+    val device: String,
+)
+
+@Serializable
+private data class ManifestResponse(val files: List<ManifestEntry>)
+
+@Serializable
+private data class UploadResponse(
+    val path: String,
+    val version: Int,
+    val sha256: String,
+    val unchanged: Boolean = false,
+)
+
+@Serializable
+data class HistoryVersion(
+    val version: Int,
+    val sha256: String,
+    val size: Long,
+    @SerialName("created_at") val createdAt: Double,
+    val device: String,
+)
+
+@Serializable
+private data class HistoryResponse(val path: String, val versions: List<HistoryVersion>)
+
+@Serializable
+private data class RestoreResponse(val path: String, val version: Int)
+
+@Serializable
+data class LockInfo(
+    val target: String,
+    val device: String,
+    @SerialName("expires_at") val expiresAt: Double,
+)
+
+@Serializable
+private data class LocksResponse(val locks: List<LockInfo>)
 
 /**
  * emusync サーバーの HTTP API（設計書 §3）。
@@ -34,7 +98,7 @@ class EmusyncApi(
     baseUrl: String,
     token: String,
     private val client: OkHttpClient,
-) {
+) : RemoteApi {
     private val base: String = normalizeBaseUrl(baseUrl)
         ?: throw IllegalArgumentException("不正なサーバー URL: $baseUrl")
     private val authHeader: String = "Bearer ${token.trim()}"
@@ -48,7 +112,98 @@ class EmusyncApi(
         decode<PingResponse>(resp)
     }
 
+    /** `GET /api/manifest?prefix=`。キーは prefix を取り除いた相対パス */
+    override suspend fun manifest(prefix: String): Map<String, RemoteFile> {
+        val u = url("manifest").newBuilder().addQueryParameter("prefix", prefix).build()
+        val files = send(get(u)) { decode<ManifestResponse>(it) }.files
+        return files.associate { f ->
+            val rel = f.path.substring(prefix.length.coerceAtMost(f.path.length))
+            rel to RemoteFile(rel, f.version, f.sha256, f.size, f.updatedAt, f.device)
+        }
+    }
+
+    /** `GET /api/files/{path}`（`version` を指定すると過去の版）。本文の SHA-256 を検証する */
+    override suspend fun download(path: String, out: OutputStream, version: Int?): Downloaded {
+        val b = url("files", path).newBuilder()
+        if (version != null && version != 0) b.addQueryParameter("version", version.toString())
+        return send(get(b.build())) { resp ->
+            val ver = resp.header("X-Version")?.toIntOrNull()
+                ?: throw ApiException.Protocol("X-Version がありません: $path")
+            val expected = resp.header("X-SHA256")
+                ?: throw ApiException.Protocol("X-SHA256 がありません: $path")
+            val md = MessageDigest.getInstance("SHA-256")
+            resp.body.byteStream().use { input ->
+                val buf = ByteArray(1 shl 16)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    md.update(buf, 0, n)
+                    out.write(buf, 0, n)
+                }
+            }
+            val sha = md.digest().toHex()
+            if (!sha.equals(expected, ignoreCase = true)) {
+                throw ApiException.Protocol("ダウンロード内容が壊れています: $path")
+            }
+            Downloaded(ver, sha)
+        }
+    }
+
+    /** `PUT /api/files/{path}`（楽観ロック）。409 は [UploadOutcome.Rejected] で返す */
+    override suspend fun upload(path: String, content: UploadContent, baseVersion: Int): UploadOutcome {
+        val req = Request.Builder()
+            .url(url("files", path))
+            .header("If-Match", baseVersion.toString())
+            .header("X-SHA256", content.sha256)
+            .put(StreamBody(content))
+            .build()
+        return try {
+            val r = send(req) { decode<UploadResponse>(it) }
+            UploadOutcome.Ok(r.version, r.sha256, r.unchanged)
+        } catch (e: ApiException.Conflict409) {
+            UploadOutcome.Rejected(e.serverVersion, e.serverSha256)
+        }
+    }
+
+    /** `GET /api/history/{path}`（新しい順） */
+    suspend fun history(path: String): List<HistoryVersion> =
+        send(get(url("history", path))) { decode<HistoryResponse>(it) }.versions
+
+    /** `POST /api/restore/{path}`。返り値は新しくできた版 */
+    suspend fun restore(path: String, version: Int): Int {
+        val body = buildJsonObject { put("version", version) }.toString().toRequestBody(JSON)
+        return send(Request.Builder().url(url("restore", path)).post(body).build()) {
+            decode<RestoreResponse>(it)
+        }.version
+    }
+
+    /** `POST /api/locks/{target}`。他の端末が保持していれば [ApiException.Locked423] */
+    suspend fun lock(target: String, ttlSeconds: Int = DEFAULT_LOCK_TTL, force: Boolean = false): LockInfo {
+        val body = buildJsonObject {
+            put("ttl", ttlSeconds)
+            put("force", force)
+        }.toString().toRequestBody(JSON)
+        return send(Request.Builder().url(url("locks", target)).post(body).build()) { decode<LockInfo>(it) }
+    }
+
+    /** `DELETE /api/locks/{target}`（自分のロックだけを消す） */
+    suspend fun unlock(target: String) {
+        send(Request.Builder().url(url("locks", target)).delete().build()) { }
+    }
+
+    /** `GET /api/locks`（期限内のものだけ） */
+    suspend fun locks(): List<LockInfo> = send(get(url("locks"))) { decode<LocksResponse>(it) }.locks
+
     // ------------------------------------------------------------ 内部
+
+    /** ファイルから流し込む本文。OkHttp が再送するときは開き直す */
+    private class StreamBody(private val content: UploadContent) : RequestBody() {
+        override fun contentType() = OCTET_STREAM
+        override fun contentLength() = content.size
+        override fun writeTo(sink: BufferedSink) {
+            content.open().source().use { sink.writeAll(it) }
+        }
+    }
 
     /** Python の `base + "/api/" + "/".join(quote(p, safe="/") for p in parts)` と同じ */
     internal fun url(vararg parts: String): HttpUrl =
@@ -56,14 +211,14 @@ class EmusyncApi(
 
     private fun get(url: HttpUrl): Request = Request.Builder().url(url).get().build()
 
-    private suspend fun <T> send(request: Request, onSuccess: (Response) -> T): T {
+    private suspend fun <T> send(request: Request, onSuccess: (Response) -> T): T = withContext(Dispatchers.IO) {
         val req = request.newBuilder().header("Authorization", authHeader).build()
         val resp = try {
             client.newCall(req).await()
         } catch (e: IOException) {
             throw ApiException.fromIo(e)
         }
-        return resp.use {
+        resp.use {
             if (!it.isSuccessful) throw errorFor(it)
             try {
                 onSuccess(it)
@@ -84,6 +239,11 @@ class EmusyncApi(
 
     companion object {
         internal val json = Json { ignoreUnknownKeys = true }
+        private val JSON = "application/json".toMediaType()
+        private val OCTET_STREAM = "application/octet-stream".toMediaType()
+
+        /** サーバーの既定と同じ 6 時間 */
+        const val DEFAULT_LOCK_TTL = 6 * 3600
 
         /** URL を正規化する。http/https 以外や、解析できないものは null */
         fun normalizeBaseUrl(raw: String): String? {

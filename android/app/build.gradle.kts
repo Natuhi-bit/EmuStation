@@ -54,3 +54,8 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.okhttp.tls)
 }
+
+tasks.withType<Test>().configureEach {
+    // Android と同じく、ファイル名を UTF-8 で扱う（日本語などのファイル名のテストのため）
+    environment("LC_ALL", "C.UTF-8")
+}

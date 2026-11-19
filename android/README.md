@@ -7,7 +7,7 @@
 | 段階 | 内容 | 状態 |
 |---|---|---|
 | 1 | 設定画面、URL とトークンの保存、CA の取り込み、接続テスト | 完了 |
-| 2 | 同期エンジン（UI なし）と単体テスト | 未着手 |
+| 2 | 同期エンジン（UI なし）と単体テスト | 完了 |
 | 3〜6 | ターゲット管理、プレイの流れ、競合・履歴、定期送信 | 未着手 |
 
 ## ビルド
@@ -27,16 +27,31 @@ echo "sdk.dir=/path/to/android-sdk" > local.properties   # ANDROID_HOME を設�
 android/scripts/server-integration.sh
 ```
 
-サーバーを一時フォルダに立て、正しいトークンでは ping が成功すること、違うトークンでは 401 になること、
-サーバーを止めると「つながらない」になることを確かめる。
+サーバーを一時フォルダに立てて、次を確かめる。
+- ping（正しいトークンで成功、違うトークンで 401、サーバー停止で「つながらない」）、ロック、409、履歴と復元
+- 同期のシナリオ 1〜6（設計書 §11）
+- Python 版クライアント（client/emusync.py）との相互運用：互いに送ったファイルを取得できる、競合を同じように検出する
 
-## 構成（段階 1 の時点）
+## 同期エンジンが Python 版と同じ動作をすることの確認
+
+- `PythonParityTest`：1つのファイルについて、手元・サーバー・base の状態、モード、prefer、dry-run、
+  「manifest のあとで他の端末が更新した」の全組み合わせ（1134 通り）を Python 版の `sync_target` で実際に動かした結果と照合する。
+  期待値は `scripts/gen_decision_cases.py` で作り直せる
+- `FnmatchTest`：除外パターンの照合を Python の `fnmatch` の結果と照合する（`scripts/gen_fnmatch_cases.py`）
+- `FakeServerScenarioTest` / `RealServerScenarioTest`：§11 のシナリオ 1〜6
+
+## 構成（段階 2 の時点）
 
 ```
 app/src/main/java/com/emustation/emusync/
   data/api/ApiException.kt     # エラー型（Unauthorized, Conflict409, Locked423, Offline, Tls, Network, Http, Protocol）
-  data/api/EmusyncApi.kt       # HTTP 呼び出し（段階 1 は ping のみ）、パスのエンコード
+  data/api/EmusyncApi.kt       # §3 の HTTP 呼び出し（RemoteApi の実装）、パスのエンコード
   data/api/TlsConfig.kt        # CA の読み込み・保存、その CA だけを信頼する TrustManager、OkHttp の設定
+  data/storage/JavaLocalFs.kt  # 走査・ハッシュ・アトミックな書き込み（LocalFs の実装）
+  data/storage/Fnmatch.kt      # 除外パターン（Python の fnmatch 相当）
+  data/storage/HashCache.kt    # ハッシュのキャッシュ（段階 3 で Room にする）
+  domain/sync/SyncEngine.kt    # §4 の同期エンジン（Android に依存しない）
+  domain/sync/Ports.kt         # RemoteApi / LocalFs / BaseStateStore
   data/prefs/SettingsStore.kt  # DataStore
   data/prefs/TokenCipher.kt    # Android Keystore の AES-GCM 鍵でトークンを暗号化
   ui/settings/                 # 設定画面

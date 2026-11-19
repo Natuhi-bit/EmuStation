@@ -1,6 +1,10 @@
 package com.emustation.emusync.data.api
 
+import com.emustation.emusync.domain.sync.UploadContent
+import com.emustation.emusync.domain.sync.UploadOutcome
+import com.emustation.emusync.testing.sha256
 import kotlinx.coroutines.test.runTest
+import java.io.ByteArrayOutputStream
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
@@ -179,5 +183,104 @@ class EmusyncApiTest {
         assertEquals("win-desktop", l.device)
         assertEquals(1763600000.25, l.expiresAt, 0.0)
         assertEquals("win-desktop がプレイ中です", l.detail)
+    }
+
+    // ------------------------------------------------------------ 同期で使う API
+
+    @Test
+    fun manifest_stripsPrefix_andSendsQuery() = runTest {
+        server.enqueue(
+            MockResponse.Builder().code(200).body(
+                """{"files": [{"path": "psp/ULJM05800/DATA.BIN", "version": 3, "sha256": "ab",
+                   "size": 12345, "updated_at": 1763560000.12, "device": "win-desktop"}]}""",
+            ).build(),
+        )
+        val m = api().manifest("psp/")
+        val f = m.getValue("ULJM05800/DATA.BIN")
+        assertEquals(3, f.version)
+        assertEquals(12345L, f.size)
+        assertEquals("win-desktop", f.device)
+        val req = server.takeRequest()
+        assertEquals("/emusync/api/manifest", req.url.encodedPath)
+        assertEquals("psp/", req.url.queryParameter("prefix"))
+    }
+
+    @Test
+    fun download_verifiesSha_andReadsVersion() = runTest {
+        val body = "save data"
+        server.enqueue(
+            MockResponse.Builder().code(200).body(body)
+                .addHeader("X-Version", "7").addHeader("X-SHA256", sha256(body)).build(),
+        )
+        server.enqueue(
+            MockResponse.Builder().code(200).body("tampered")
+                .addHeader("X-Version", "7").addHeader("X-SHA256", sha256(body)).build(),
+        )
+        val out = ByteArrayOutputStream()
+        val d = api().download("psp/a b/#.bin", out, version = 2)
+        assertEquals(7, d.version)
+        assertEquals(sha256(body), d.sha256)
+        assertEquals(body, out.toString())
+        val req = server.takeRequest()
+        assertEquals("/emusync/api/files/psp/a%20b/%23.bin", req.url.encodedPath)
+        assertEquals("2", req.url.queryParameter("version"))
+
+        assertThrows<ApiException.Protocol> { api().download("psp/x", ByteArrayOutputStream()) }
+    }
+
+    @Test
+    fun upload_sendsHeaders_andParsesResult() = runTest {
+        val data = "new save".toByteArray()
+        val content = UploadContent(data.size.toLong(), sha256(data)) { data.inputStream() }
+        server.enqueue(MockResponse.Builder().code(200).body("""{"path": "psp/f", "version": 4, "sha256": "${sha256(data)}"}""").build())
+        server.enqueue(MockResponse.Builder().code(200).body("""{"path": "psp/f", "version": 4, "sha256": "${sha256(data)}", "unchanged": true}""").build())
+        server.enqueue(
+            MockResponse.Builder().code(409).body(
+                """{"detail": {"message": "サーバー側が更新されています", "server_version": 5, "server_sha256": "cd"}}""",
+            ).build(),
+        )
+
+        assertEquals(UploadOutcome.Ok(4, sha256(data), false), api().upload("psp/f", content, 3))
+        val req = server.takeRequest()
+        assertEquals("PUT", req.method)
+        assertEquals("3", req.headers["If-Match"])
+        assertEquals(sha256(data), req.headers["X-SHA256"])
+        assertEquals("application/octet-stream", req.headers["Content-Type"])
+        assertEquals("new save", req.body!!.utf8())
+
+        assertEquals(UploadOutcome.Ok(4, sha256(data), true), api().upload("psp/f", content, 4))
+        assertEquals(UploadOutcome.Rejected(5, "cd"), api().upload("psp/f", content, 4))
+    }
+
+    @Test
+    fun locks_history_restore() = runTest {
+        server.enqueue(MockResponse.Builder().code(200).body("""{"target": "psp", "device": "me", "expires_at": 1.5}""").build())
+        server.enqueue(MockResponse.Builder().code(200).body("""{"released": true}""").build())
+        server.enqueue(MockResponse.Builder().code(200).body("""{"locks": [{"target": "ps2", "device": "win", "expires_at": 2.0}]}""").build())
+        server.enqueue(
+            MockResponse.Builder().code(200).body(
+                """{"path": "psp/f", "versions": [{"version": 2, "sha256": "b", "size": 3, "created_at": 9.0, "device": "x"}]}""",
+            ).build(),
+        )
+        server.enqueue(MockResponse.Builder().code(200).body("""{"path": "psp/f", "version": 3}""").build())
+
+        assertEquals(LockInfo("psp", "me", 1.5), api().lock("psp", ttlSeconds = 43200, force = true))
+        val lockReq = server.takeRequest()
+        assertEquals("POST", lockReq.method)
+        assertEquals("""{"ttl":43200,"force":true}""", lockReq.body!!.utf8())
+
+        api().unlock("psp")
+        assertEquals("DELETE", server.takeRequest().method)
+
+        assertEquals(listOf(LockInfo("ps2", "win", 2.0)), api().locks())
+        server.takeRequest()
+
+        assertEquals(listOf(HistoryVersion(2, "b", 3, 9.0, "x")), api().history("psp/f"))
+        assertEquals("/emusync/api/history/psp/f", server.takeRequest().url.encodedPath)
+
+        assertEquals(3, api().restore("psp/f", 2))
+        val rr = server.takeRequest()
+        assertEquals("/emusync/api/restore/psp/f", rr.url.encodedPath)
+        assertEquals("""{"version":2}""", rr.body!!.utf8())
     }
 }
