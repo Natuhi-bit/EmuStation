@@ -11,7 +11,7 @@
 
 エミュレータのセーブデータを、自宅の Ubuntu サーバー経由で Windows PC と Android 端末の間で同期する。
 
-- 外出先からは VPN（Tailscale）経由でサーバーにつなぐ。サーバーをインターネットへ直接公開はしない
+- 外出先からは VPN（WireGuard）経由でサーバーにつなぐ。サーバーをインターネットへ直接公開はしない
 - Windows 側は Python 版クライアントの `run` コマンドで「ロック取得 → 取得 → エミュ起動 → 終了後に送信 → ロック解除」を行う
 - Android 側はこの設計書のアプリで同じことを行う
 - 配布は自分用の直接インストール（APK）。Google Play には出さない。このため MANAGE_EXTERNAL_STORAGE を使ってよい
@@ -39,7 +39,7 @@
 
 ```
 [Android アプリ] ─┐
-                  ├─ Tailscale(VPN) ─ Nginx (https://ubuntu-server/emusync/) ─ emusync サーバー (127.0.0.1:8765)
+                  ├─ WireGuard(VPN) ─ Nginx (https://ubuntu-server/emusync/) ─ emusync サーバー (127.0.0.1:8765)
 [Windows Python] ─┘                                                        ├ SQLite（パスごとの版・履歴・ロック）
                                                                             └ blobs/（SHA-256 名で実体を保存）
 ```
@@ -210,7 +210,7 @@ PUSH を実行 → 成功したら DELETE /api/locks/{target} → プレイセ�
 - 1行に1ターゲット。表示する内容：機種名、エミュのアイコンと名前、最後に同期した日時、状態
   - 状態の種類：同期済み／未送信の変更あり／競合 n 件／<端末名> がプレイ中／この端末でプレイ中
 - 行のボタン：[遊ぶ]、メニュー（今すぐ同期、取得のみ、送信のみ、プレビュー（dry-run）、履歴、編集）
-- 上部：サーバーの接続状態（ping の結果）。つながらないときは「VPN（Tailscale）を確認」と表示する
+- 上部：サーバーの接続状態（ping の結果）。つながらないときは「VPN（WireGuard）を確認」と表示する
 - 上部のメニュー：すべて同期、設定
 
 ### 6.2 設定

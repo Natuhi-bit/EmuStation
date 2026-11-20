@@ -62,7 +62,7 @@ class HistoryScreenTest {
                 )
             }
         }
-        compose.onNodeWithText("サーバーにつながりません。VPN（Tailscale）を確認してください").assertIsDisplayed()
+        compose.onNodeWithText("サーバーにつながりません。VPN（WireGuard）を確認してください").assertIsDisplayed()
         compose.onNodeWithText("再試行").performClick()
         assertEquals(listOf("retry"), calls)
     }

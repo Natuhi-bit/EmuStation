@@ -31,13 +31,13 @@ class SyncLogScreenTest {
             SyncLogEntity(4, "psp", "SYNC", "REMOTE", false, t + 3, t + 3, 0, 1, 0, emptyList(), null),
             SyncLogEntity(3, "ps3", "SYNC", null, false, t + 2, t + 2, 3, 0, 1, listOf("BLUS30443/PARAM.SFO: HTTP 413: 大きすぎます"), null),
             SyncLogEntity(2, "vita", "SYNC", null, true, t + 1, t + 1, 2, 2, 0, emptyList(), null),
-            SyncLogEntity(1, "psp", "SYNC", null, false, t, t, 0, 0, 0, emptyList(), "サーバーにつながりません。VPN（Tailscale）を確認してください"),
+            SyncLogEntity(1, "psp", "SYNC", null, false, t, t, 0, 0, 0, emptyList(), "サーバーにつながりません。VPN（WireGuard）を確認してください"),
         )
         compose.setContent { EmusyncTheme { SyncLogContent(entries) {} } }
         compose.onNodeWithText("送信のみ").assertIsDisplayed()
         compose.onNodeWithText("同期 / サーバー版を使う").assertIsDisplayed()
         compose.onNodeWithText("プレビュー").assertIsDisplayed()
-        compose.onNodeWithText("サーバーにつながりません。VPN（Tailscale）を確認してください").assertIsDisplayed()
+        compose.onNodeWithText("サーバーにつながりません。VPN（WireGuard）を確認してください").assertIsDisplayed()
         compose.onNodeWithText("送信 3・競合 1・失敗 1").performClick()
         compose.onNodeWithText("× BLUS30443/PARAM.SFO: HTTP 413: 大きすぎます").assertIsDisplayed()
         compose.onRoot().saveScreenshot("sync-log")

@@ -109,7 +109,7 @@ class HomeScreenTest {
                 hasNotificationPermission = false,
             ),
         )
-        compose.onNodeWithText("サーバーにつながりません。VPN（Tailscale）を確認してください").assertIsDisplayed()
+        compose.onNodeWithText("サーバーにつながりません。VPN（WireGuard）を確認してください").assertIsDisplayed()
         compose.onNodeWithText("セーブフォルダを読み書きするため、「すべてのファイルへのアクセス」を許可してください").assertIsDisplayed()
         compose.onRoot().saveScreenshot("home-offline")
     }
@@ -183,7 +183,7 @@ class HomeScreenTest {
                 play = PlayDialog.Unreachable("psp", "PSP", UiText(R.string.conn_offline)),
             ),
         )
-        compose.onNodeWithText("サーバーにつながりません。VPN（Tailscale）を確認してください").assertIsDisplayed()
+        compose.onNodeWithText("サーバーにつながりません。VPN（WireGuard）を確認してください").assertIsDisplayed()
         compose.onNode(isDialog()).saveScreenshot("play-unreachable")
         compose.onNodeWithText("同期せずに起動").performClick()
         assertEquals(listOf("playOffline psp"), calls)

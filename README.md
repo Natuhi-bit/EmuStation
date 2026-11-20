@@ -35,12 +35,16 @@ sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.p
 ```
 
 ### Nginx
-`server/nginx-emusync.conf` の `location` ブロックを、Nextcloud を載せている既存の `server { listen 443 ssl; ... }` の中に貼り付ける。
-`allow` 行の LAN 側のアドレス範囲は自宅のネットワークに合わせて変える。
+`server/nginx-emusync.conf` を `/etc/nginx/snippets/emusync.conf` に置き、Nextcloud を載せている既存の
+`server { listen 443 ssl; ... }` ブロックの中に `include snippets/emusync.conf;` の1行を足す
+（`sites-available` には置かない。`location` だけのファイルは `server` の外では読めない）。
+`allow` 行のアドレス範囲（LAN と WireGuard）は自宅のネットワークに合わせて変える。
 
 ```bash
+sudo cp server/nginx-emusync.conf /etc/nginx/snippets/emusync.conf
+sudo nano /etc/nginx/sites-available/nextcloud   # 443 の server ブロックに include snippets/emusync.conf; を足す
 sudo nginx -t && sudo systemctl reload nginx
-curl -k -H "Authorization: Bearer <トークン>" https://ubuntu-server/emusync/api/ping
+curl -k -H "Authorization: Bearer <トークン>" https://192.168.50.49/emusync/api/ping
 ```
 
 ### 調整用の環境変数（emusync.service の Environment=）
@@ -56,22 +60,18 @@ curl -k -H "Authorization: Bearer <トークン>" https://ubuntu-server/emusync/
 
 ## 2. 外出先からの接続（VPN）
 
-ルーターのポートを開けずに済む **Tailscale** をおすすめする。スマホのモバイル回線（キャリアのNAT配下）からもそのままつながる。
+外出先からは **WireGuard** で自宅の LAN につなぐ（ルーターの WireGuard サーバー機能、またはサーバー上の WireGuard）。
+サーバーの URL は **LAN の IP アドレス**（例 `https://192.168.50.49/emusync`）にすると、自宅でも外でも同じ値のままで使える。
 
-```bash
-# サーバー
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-```
-Windows と Android にも Tailscale アプリを入れて、同じアカウントでログインする。
-MagicDNS を有効にすると、外出先でも `ubuntu-server` という名前でサーバーを引けるので、
-`config.yaml` の `server:` は自宅でも外でも同じ値のままで使える。
-Tailscale 経由の通信は 100.64.0.0/10 から来るので、Nginx の `allow` にはこの範囲を入れてある。
-
-WireGuard を自分で立てる場合はルーターで UDP ポートを1つ開ける必要がある。
-同期アプリ側は、どちらの VPN でも何も変えなくてよい。
+- **サーバーの IP を固定する**：ルーターの DHCP 設定で、サーバーに同じ IP を割り当てる
+- **WireGuard のクライアント設定**：各端末の `[Peer]` の `AllowedIPs` に自宅の LAN（例 `192.168.50.0/24`）を入れる。
+  外ではこの範囲が WireGuard を通るので、LAN の IP のままでサーバーに届く。自宅にいるときは WireGuard をオフにする
+- **Nginx の `allow`**：WireGuard のクライアントに割り当てる範囲（例 `10.6.0.0/24`）を入れる
+- 同期アプリ側は、自宅と外で何も変えなくてよい
 
 > 証明書が自己署名の場合は、その証明書ファイルを各端末にコピーして `verify: <パス>` を指定する（`false` にはしない）。
+> Android アプリは証明書のホスト名を確かめるので、URL に IP アドレスを使うなら、証明書の SAN に `IP:192.168.50.49` が入っている必要がある
+> （`openssl x509 -in <証明書> -noout -ext subjectAltName` で確かめられる）。
 
 ---
 
@@ -130,7 +130,7 @@ cd android
 自分用なので Google Play には出さず、APK を端末に直接入れる（「提供元不明のアプリ」を許可する）。
 
 ### 最初の設定
-1. **設定**：サーバー URL（例 `https://ubuntu-server/emusync`）とトークン（`app.py add-device android-phone` で発行）を入れ、[接続テスト]。証明書が自己署名なら CA 証明書（`.crt` / `.pem`）を取り込む
+1. **設定**：サーバー URL（例 `https://192.168.50.49/emusync`）とトークン（`app.py add-device android-phone` で発行）を入れ、[接続テスト]。証明書が自己署名なら CA 証明書（`.crt` / `.pem`）を取り込む
 2. **権限**：「すべてのファイルへのアクセス」と「通知」を許可する
 3. **ターゲットの追加**（右下の ＋）：機種（psp / vita / ps2 / ps3）、エミュのアプリ、エミュのデータフォルダを選ぶ。保存の前に「送信・取得・競合が何件になるか」を確認できる
    - 各エミュのデータフォルダは、`Android/data/` の外（例 `/storage/emulated/0/ARMSX2`）に作っておく。`Android/data/` の中は、ほかのアプリから読めない

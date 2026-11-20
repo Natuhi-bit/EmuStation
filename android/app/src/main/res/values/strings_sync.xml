@@ -131,7 +131,7 @@
     <string name="play_locked_title">%1$s がプレイ中</string>
     <string name="play_locked_text">%1$s が %2$s をプレイ中です（ロックの期限: %3$s）。向こうで終わってから起動してください。奪って起動すると、向こうのセーブと競合するおそれがあります</string>
     <string name="play_unreachable_title">サーバーにつながりません</string>
-    <string name="play_unreachable_text">VPN（Tailscale）を確認してください。同期せずに起動しますか？ 遊び終わったら、つながるときに送信します</string>
+    <string name="play_unreachable_text">VPN（WireGuard）を確認してください。同期せずに起動しますか？ 遊び終わったら、つながるときに送信します</string>
     <string name="play_conflicts_title">競合が %1$d 件あります</string>
     <string name="play_conflicts_text">手元とサーバーの両方で変わったファイルがあるので、起動を止めました。何も上書きしていません。無視して起動すると、手元のセーブで遊びます</string>
     <string name="play_error_title">%1$s を起動できません</string>
