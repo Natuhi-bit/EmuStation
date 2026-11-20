@@ -23,3 +23,16 @@ fun connectionErrorText(e: Throwable): UiText = when (e) {
     is ApiException.Protocol -> UiText(R.string.conn_protocol)
     else -> UiText(R.string.conn_unknown, e.message ?: e.javaClass.simpleName)
 }
+
+/**
+ * 原因を調べるための詳細（例外の種類とメッセージ）。例 `UnknownHostException: Unable to resolve host "ubuntu-server"`。
+ * 通信の例外は ApiException に包まれているので、いちばん内側の原因を出す。HTTP の応答があったものは null
+ */
+fun technicalDetail(e: Throwable): String? {
+    if (e is ApiException.Http || e is ApiException.Unauthorized) return null
+    if (e is ApiException.Offline && e.httpCode != null) return null
+    var c: Throwable = e
+    while (c.cause != null && c.cause !== c) c = c.cause!!
+    if (c === e && e is ApiException) return null
+    return listOfNotNull(c.javaClass.simpleName, c.message).joinToString(": ")
+}

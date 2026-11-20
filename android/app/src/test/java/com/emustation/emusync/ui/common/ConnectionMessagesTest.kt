@@ -46,4 +46,16 @@ class ConnectionMessagesTest {
         assertEquals(R.string.conn_http_403, connectionErrorText(ApiException.Http(403, "")).id)
         assertEquals(R.string.conn_http, connectionErrorText(ApiException.Http(500, "")).id)
     }
+
+    @Test
+    fun technicalDetail_showsInnermostCause() {
+        val e = ApiException.fromIo(UnknownHostException("Unable to resolve host \"ubuntu-server\""))
+        assertEquals("UnknownHostException: Unable to resolve host \"ubuntu-server\"", technicalDetail(e))
+        val refused = ApiException.fromIo(ConnectException("Failed to connect to /192.168.50.49:443"))
+        assertEquals("ConnectException: Failed to connect to /192.168.50.49:443", technicalDetail(refused))
+        // HTTP の応答があったもの（文言で十分）は詳細を出さない
+        assertEquals(null, technicalDetail(ApiException.Http(404, "Not Found")))
+        assertEquals(null, technicalDetail(ApiException.Unauthorized("トークンが無効です")))
+        assertEquals(null, technicalDetail(ApiException.Offline("HTTP 502", httpCode = 502)))
+    }
 }

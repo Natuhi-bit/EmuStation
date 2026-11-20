@@ -10,6 +10,7 @@ import com.emustation.emusync.data.api.CaCertificates
 import com.emustation.emusync.data.api.EmusyncApi
 import com.emustation.emusync.ui.common.UiText
 import com.emustation.emusync.ui.common.connectionErrorText
+import com.emustation.emusync.ui.common.technicalDetail
 import com.emustation.emusync.work.PeriodicPushWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,7 +39,8 @@ sealed interface TestState {
     data object Idle : TestState
     data object Running : TestState
     class Success(val text: UiText) : TestState
-    class Failure(val text: UiText) : TestState
+    /** [detail]：原因を調べるための詳細（接続先と、例外の種類・メッセージ） */
+    class Failure(val text: UiText, val detail: String? = null) : TestState
 }
 
 data class SettingsUiState(
@@ -146,7 +148,11 @@ class SettingsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                TestState.Failure(connectionErrorText(e))
+                val url = EmusyncApi.normalizeBaseUrl(s.serverUrl)?.let { "$it/api/ping" }
+                TestState.Failure(
+                    connectionErrorText(e),
+                    listOfNotNull(url?.let { app.getString(R.string.test_detail_url, it) }, technicalDetail(e)).joinToString("\n").ifEmpty { null },
+                )
             }
             _state.update { it.copy(test = result) }
         }

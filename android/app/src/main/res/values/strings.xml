@@ -38,6 +38,7 @@
     <string name="conn_network">通信エラー: %1$s</string>
     <string name="conn_protocol">サーバーの応答を読めません。サーバー URL を確認してください</string>
     <string name="conn_unknown">エラー: %1$s</string>
+    <string name="test_detail_url">接続先: %1$s</string>
 
     <!-- CA 証明書 -->
     <string name="section_ca">CA 証明書</string>
