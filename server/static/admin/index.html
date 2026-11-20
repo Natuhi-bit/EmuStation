@@ -67,6 +67,10 @@
     <section data-panel="import" hidden>
       <div class="card">
         <h2>1. アップロード</h2>
+        <p id="imp-not-ready" class="warn" hidden>
+          サーバーに python-multipart が入っていないため、アップロードを受け取れません。サーバーで次を実行してから、emusync を再起動してください。<br>
+          <code>sudo /opt/emusync/venv/bin/pip install -r /opt/emusync/server/requirements.txt && sudo systemctl restart emusync</code>
+        </p>
         <p class="muted">Nextcloud などにあるセーブデータを取り込みます。中身が端末のセーブフォルダと同じ並びになっているフォルダ（PSP なら SAVEDATA、PS2 なら memcards）を選んでください。</p>
         <div class="row">
           <label>ターゲット <input id="imp-target" list="target-names" required placeholder="psp / vita / ps2 / ps3"></label>

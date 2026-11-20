@@ -234,6 +234,19 @@ def plan_import(core: Core, files: list[dict], opt: ImportOptions) -> dict:
     return {"target": opt.target, "stripped_top": top, "items": items, "counts": counts}
 
 
+def upload_ready() -> bool:
+    """アップロードの受け取りに必要な python-multipart が入っているか"""
+    try:
+        import python_multipart  # noqa: F401
+        return True
+    except ImportError:
+        try:
+            import multipart  # noqa: F401  （古い版の名前）
+            return True
+        except ImportError:
+            return False
+
+
 # ---------------------------------------------------------------- ルーター
 class LoginReq(BaseModel):
     password: str
@@ -282,6 +295,7 @@ def build_router(core: Core) -> APIRouter:
         return {
             "configured": core.meta_get("admin_password") is not None,
             "logged_in": session_valid(core, request.cookies.get(COOKIE)),
+            "upload_ready": upload_ready(),
         }
 
     @router.post("/api/login")

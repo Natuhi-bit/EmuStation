@@ -34,7 +34,7 @@ def test_page_and_static(client):
 
 
 def test_login_flow(client, core):
-    assert client.get("/admin/api/session").json() == {"configured": False, "logged_in": False}
+    assert client.get("/admin/api/session").json() == {"configured": False, "logged_in": False, "upload_ready": True}
     assert client.post("/admin/api/login", json={"password": "x"}, headers=H).status_code == 409
 
     core.ADMIN.set_admin_password("correct horse")

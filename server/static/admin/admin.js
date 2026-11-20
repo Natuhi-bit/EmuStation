@@ -67,8 +67,11 @@ function showError(sel, e) {
 }
 
 // ---------------------------------------------------------------- ログイン
+let uploadReady = true;
+
 async function boot() {
   const s = await api("session");
+  uploadReady = s.upload_ready !== false;
   if (s.logged_in) showApp();
   else showLogin(!s.configured);
 }
@@ -209,6 +212,7 @@ let imp = null; // { id, top }
 
 loaders.import = async () => {
   await loadTargets();
+  $("#imp-not-ready").hidden = uploadReady;
   if (!$("#imp-excludes").value) $("#imp-excludes").value = DEFAULT_EXCLUDES.join("\n");
 };
 
@@ -230,12 +234,17 @@ $("#imp-folder").addEventListener("change", () => { $("#imp-zip").value = ""; up
 $("#imp-zip").addEventListener("change", () => { $("#imp-folder").value = ""; updateChosen(); });
 
 /** アップロードの進み具合を出すため、fetch ではなく XMLHttpRequest を使う */
-function uploadForm(form) {
+function uploadForm(form, totalBytes) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    const started = Date.now();
+    let sent = 0;
     xhr.open("POST", "api/imports");
     xhr.setRequestHeader("X-Emusync-Admin", "1");
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) $("#imp-progress").value = (e.loaded / e.total) * 100; };
+    xhr.upload.onprogress = (e) => {
+      sent = e.loaded;
+      if (e.lengthComputable) $("#imp-progress").value = (e.loaded / e.total) * 100;
+    };
     xhr.onload = () => {
       let data = null;
       try { data = JSON.parse(xhr.responseText); } catch { /* */ }
@@ -247,7 +256,14 @@ function uploadForm(form) {
         reject(new ApiError(xhr.status, msg || `HTTP ${xhr.status}`));
       }
     };
-    xhr.onerror = () => reject(new ApiError(0, "サーバーにつながりません"));
+    // 通信が途中で切れた。どこまで送れたかで、原因の見当がつく
+    //   0 B：選んだファイルを読めなかった（エミュが使用中で書き換わった など）か、最初からつながらない
+    //   途中まで：VPN（MTU）やモバイル回線で、大きな送信が止まった など
+    xhr.onerror = () => reject(new ApiError(0,
+      `送信が途中で切れました（${fmtSize(totalBytes)} 中 ${fmtSize(sent)} を送信、${Math.round((Date.now() - started) / 1000)} 秒後）。` +
+      (sent === 0
+        ? "選んだファイルを読めなかった可能性があります（エミュが使用中だと書き換わって失敗します）。エミュを終了してから選び直すか、zip にして選んでください。"
+        : "通信が切れた可能性があります。自宅の Wi-Fi で試すか、zip にして小分けにしてください。")));
     xhr.send(form);
   });
 }
@@ -257,6 +273,7 @@ $("#imp-upload").addEventListener("click", async () => {
   const target = $("#imp-target").value.trim();
   if (!/^[A-Za-z0-9._-]+$/.test(target)) { showError("#imp-error", new Error("ターゲット名を入れてください（英数字と . _ - のみ）")); return; }
   const { folder, zip } = chosenFiles();
+  const totalBytes = zip ? zip.size : folder.reduce((a, f) => a + f.size, 0);
   const form = new FormData();
   if (zip) form.append("zip", zip);
   else folder.forEach((f) => { form.append("files", f, f.name); form.append("paths", f.webkitRelativePath || f.name); });
@@ -265,7 +282,7 @@ $("#imp-upload").addEventListener("click", async () => {
   $("#imp-progress").hidden = false;
   $("#imp-progress").value = 0;
   try {
-    const r = await uploadForm(form);
+    const r = await uploadForm(form, totalBytes);
     imp = { id: r.id, top: r.top };
     $("#imp-top").textContent = r.top || "";
     $("#imp-strip-label").hidden = !r.top;
