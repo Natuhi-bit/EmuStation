@@ -35,12 +35,39 @@ sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.p
 ```
 
 ### Nginx
-`server/nginx-emusync.conf` の `location` ブロックを、Nextcloud を載せている既存の `server { listen 443 ssl; ... }` の中に貼り付ける。
-`allow` 行の LAN 側のアドレス範囲は自宅のネットワークに合わせて変える。
+`server/nginx-emusync.conf` を `/etc/nginx/snippets/emusync.conf` に置き、Nextcloud を載せている既存の
+`server { listen 443 ssl; ... }` ブロックの中に `include snippets/emusync.conf;` の1行を足す
+（`sites-available` には置かない。`location` だけのファイルは `server` の外では読めない）。
+`allow` 行のアドレス範囲（LAN と WireGuard）は自宅のネットワークに合わせて変える。
 
 ```bash
+sudo cp server/nginx-emusync.conf /etc/nginx/snippets/emusync.conf
+sudo nano /etc/nginx/sites-available/nextcloud   # 443 の server ブロックに include snippets/emusync.conf; を足す
 sudo nginx -t && sudo systemctl reload nginx
-curl -k -H "Authorization: Bearer <トークン>" https://ubuntu-server/emusync/api/ping
+curl -k -H "Authorization: Bearer <トークン>" https://192.168.50.49/emusync/api/ping
+```
+
+### 管理画面（ブラウザ）
+`https://<サーバー>/emusync/admin/` で、ブラウザからサーバーを管理できる（Nginx の `allow` の範囲からだけ開ける）。
+
+- **概要**：ターゲットごとのファイル数・容量、版の数、端末の数、プレイ中ロック
+- **ファイル**：ターゲットの中のファイルの一覧、版の履歴、版ごとのダウンロード、「この版に戻す」（復元）
+- **インポート**：フォルダか zip をアップロードして、ターゲットに取り込む。先にプレビューで「新規・同じ・内容が違う・除外」を確かめられる。
+  既定では新規のファイルだけを取り込み、内容が違う既存のファイルは、選んだときだけ新しい版として取り込む（今の版は履歴に残る）。
+  取り込んだ版の端末名は `admin-import`
+- **端末**：端末の追加（トークンの発行）と削除
+- **ロック**：プレイ中ロックの一覧と、強制解除
+
+最初に、管理者パスワードを設定する（変えるときも同じ。変えると、ログイン中のブラウザはログアウトされる）。
+```bash
+cd /opt/emusync/server
+sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.py set-admin-password
+```
+
+サーバーのテスト：
+```bash
+pip install pytest httpx -r server/requirements.txt
+python -m pytest server/tests
 ```
 
 ### 調整用の環境変数（emusync.service の Environment=）
@@ -56,22 +83,18 @@ curl -k -H "Authorization: Bearer <トークン>" https://ubuntu-server/emusync/
 
 ## 2. 外出先からの接続（VPN）
 
-ルーターのポートを開けずに済む **Tailscale** をおすすめする。スマホのモバイル回線（キャリアのNAT配下）からもそのままつながる。
+外出先からは **WireGuard** で自宅の LAN につなぐ（ルーターの WireGuard サーバー機能、またはサーバー上の WireGuard）。
+サーバーの URL は **LAN の IP アドレス**（例 `https://192.168.50.49/emusync`）にすると、自宅でも外でも同じ値のままで使える。
 
-```bash
-# サーバー
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-```
-Windows と Android にも Tailscale アプリを入れて、同じアカウントでログインする。
-MagicDNS を有効にすると、外出先でも `ubuntu-server` という名前でサーバーを引けるので、
-`config.yaml` の `server:` は自宅でも外でも同じ値のままで使える。
-Tailscale 経由の通信は 100.64.0.0/10 から来るので、Nginx の `allow` にはこの範囲を入れてある。
-
-WireGuard を自分で立てる場合はルーターで UDP ポートを1つ開ける必要がある。
-同期アプリ側は、どちらの VPN でも何も変えなくてよい。
+- **サーバーの IP を固定する**：ルーターの DHCP 設定で、サーバーに同じ IP を割り当てる
+- **WireGuard のクライアント設定**：各端末の `[Peer]` の `AllowedIPs` に自宅の LAN（例 `192.168.50.0/24`）を入れる。
+  外ではこの範囲が WireGuard を通るので、LAN の IP のままでサーバーに届く。自宅にいるときは WireGuard をオフにする
+- **Nginx の `allow`**：WireGuard のクライアントに割り当てる範囲（例 `10.6.0.0/24`）を入れる
+- 同期アプリ側は、自宅と外で何も変えなくてよい
 
 > 証明書が自己署名の場合は、その証明書ファイルを各端末にコピーして `verify: <パス>` を指定する（`false` にはしない）。
+> Android アプリは証明書のホスト名を確かめるので、URL に IP アドレスを使うなら、証明書の SAN に `IP:192.168.50.49` が入っている必要がある
+> （`openssl x509 -in <証明書> -noout -ext subjectAltName` で確かめられる）。
 
 ---
 
@@ -118,19 +141,33 @@ if errorlevel 1 pause
 - **ステートセーブ（どこでもセーブ）は同期しない方が安全。** エミュのバージョンやCPUアーキテクチャ（x64 と ARM）が違うと読めないことがある。ゲーム内セーブ（メモリーカード・SAVEDATA など）を中心に同期する
 - **BIOS・キャッシュ・ログ**は `exclude:` で外す
 
-## 5. Android について
+## 5. Android アプリ
 
-当面の使い方としては、Termux で同じ `emusync.py` が動く：
+`android/` に Kotlin のアプリがある（設計書：[`docs/android-app-design.md`](docs/android-app-design.md)、開発者向け：[`android/README.md`](android/README.md)）。
+
+### ビルドと導入
 ```bash
-pkg install python && pip install requests pyyaml
-termux-setup-storage            # /storage/emulated/0 を読めるようにする
-python emusync.py -c config.yaml sync
+cd android
+./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
 ```
-ただし Android 11 以降は、ほかのアプリの `/Android/data/…` を外部アプリから読めない。
-**各エミュのセーブ（ユーザーデータ）フォルダを、共有ストレージ側（例 `/storage/emulated/0/Emu/...`）に変更できるか**をまず確認する。
-保存先を変更できないエミュは、外部の同期アプリからは扱えない。
+自分用なので Google Play には出さず、APK を端末に直接入れる（「提供元不明のアプリ」を許可する）。
 
-本番用には Kotlin のアプリにする予定：WorkManager で定期的に同期し、SAF でフォルダを読み書きし、「エミュを起動する前に取得→戻ってきたら送信」を行うランチャー画面を持たせる。サーバー側の API はこのままでよい。
+### 最初の設定
+1. **設定**：サーバー URL（例 `https://192.168.50.49/emusync`）とトークン（`app.py add-device android-phone` で発行）を入れ、[接続テスト]。証明書が自己署名なら CA 証明書（`.crt` / `.pem`）を取り込む
+2. **権限**：「すべてのファイルへのアクセス」と「通知」を許可する
+3. **ターゲットの追加**（右下の ＋）：機種（psp / vita / ps2 / ps3）、エミュのアプリ、エミュのデータフォルダを選ぶ。保存の前に「送信・取得・競合が何件になるか」を確認できる
+   - 各エミュのデータフォルダは、`Android/data/` の外（例 `/storage/emulated/0/ARMSX2`）に作っておく。`Android/data/` の中は、ほかのアプリから読めない
+
+### 使い方
+- **[遊ぶ]**：ロック → 取得と送信 → エミュを起動。ほかの端末がプレイ中なら知らせる（奪って起動もできる）。つながらないときは、同期せずに起動できる
+- **遊び終わったら（自動）**：エミュを閉じて、そのまま 2 分戻ってこなければ、自動で送信してロックを解除する（Steam のクラウドセーブのような動き）。
+  「使用状況へのアクセス」の許可が必要。画面が消えている間は数えないので、スリープで中断しても送らない。
+  送信のあと 10 分以内にエミュに戻れば、プレイ中に戻る。待ち時間（1・2・5・10 分）と、自動送信を使うかは設定画面で変えられる
+- **遊び終わったら（手動）**：エミュを終了してから、通知の **[送信して終了]**、またはアプリに戻って [送信]。送信してロックを解除する
+- **Windows**：Python 版の `run` で起動すると、エミュの終了を待って自動で送信する（`python emusync.py -c config.yaml run ps2`）
+- **競合**：両方で変わったファイルは上書きしない。ホームの「競合 n 件」から、ファイルごとに「手元を残す」「サーバー版を使う」を選ぶ
+- **履歴**：行のメニューの「履歴」から、ファイルの過去の版に戻せる
+- **定期送信**：1時間ごとに、手元の変更を送信する（取得はしない。プレイ中のターゲットは送らない）。設定で止められる
 
 ---
 
