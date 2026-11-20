@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -98,6 +99,33 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLog: 
             ServerSection(state, viewModel)
             CaSection(state, viewModel)
             PermissionSection()
+            Section(stringResource(R.string.section_auto_finish)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.label_auto_finish), style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.hint_auto_finish), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = state.autoFinish,
+                        onCheckedChange = { viewModel.setAutoFinish(it, state.autoFinishMinutes) },
+                        enabled = state.loaded,
+                        modifier = Modifier.testTag("auto-finish"),
+                    )
+                }
+                if (state.autoFinish) {
+                    Text(stringResource(R.string.label_auto_finish_minutes), style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(1, 2, 5, 10).forEach { m ->
+                            FilterChip(
+                                selected = state.autoFinishMinutes == m,
+                                onClick = { viewModel.setAutoFinish(true, m) },
+                                label = { Text(stringResource(R.string.minutes_value, m)) },
+                            )
+                        }
+                    }
+                }
+            }
             Section(stringResource(R.string.section_periodic)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -325,11 +353,13 @@ private fun PermissionSection() {
     val context = LocalContext.current
     var allFiles by remember { mutableStateOf(Permissions.hasAllFilesAccess()) }
     var notifications by remember { mutableStateOf(Permissions.hasNotificationPermission(context)) }
+    var usage by remember { mutableStateOf(Permissions.hasUsageAccess(context)) }
 
     // 設定画面から戻ってきたときに状態を読み直す
     LifecycleResumeEffect(Unit) {
         allFiles = Permissions.hasAllFilesAccess()
         notifications = Permissions.hasNotificationPermission(context)
+        usage = Permissions.hasUsageAccess(context)
         onPauseOrDispose { }
     }
 
@@ -357,6 +387,11 @@ private fun PermissionSection() {
                     Permissions.openNotificationSettings(context)
                 }
             },
+        )
+        PermissionRow(
+            label = stringResource(R.string.perm_usage_access),
+            granted = usage,
+            onRequest = { Permissions.openUsageAccessSettings(context) },
         )
     }
 }

@@ -42,6 +42,7 @@ class HomeScreenTest {
         override fun openSettings() { calls += "settings" }
         override fun requestAllFilesAccess() { calls += "allFiles" }
         override fun requestNotificationPermission() { calls += "notifications" }
+        override fun requestUsageAccess() { calls += "usage" }
         override fun dismissPreview() { calls += "dismissPreview" }
         override fun play(target: String) { calls += "play $target" }
         override fun playForce(target: String) { calls += "playForce $target" }

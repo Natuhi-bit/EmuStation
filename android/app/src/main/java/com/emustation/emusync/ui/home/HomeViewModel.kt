@@ -19,6 +19,7 @@ import com.emustation.emusync.domain.play.PlayStep
 import com.emustation.emusync.domain.play.StartResult
 import com.emustation.emusync.ui.common.UiText
 import com.emustation.emusync.work.Notifications
+import com.emustation.emusync.work.PlayWatchService
 import com.emustation.emusync.domain.Presets
 import com.emustation.emusync.domain.sync.SyncMode
 import com.emustation.emusync.ui.common.connectionErrorText
@@ -52,7 +53,7 @@ class HomeViewModel(
     private val selfDevice = MutableStateFlow<String?>(null)
     private val localStates = MutableStateFlow<Map<String, LocalState>>(emptyMap())
     private val emuLabels = MutableStateFlow<Map<String, String?>>(emptyMap())
-    private val permissions = MutableStateFlow(true to true)
+    private val permissions = MutableStateFlow(Triple(true, true, false))
     private val preview = MutableStateFlow<PreviewState?>(null)
     private val play = MutableStateFlow<PlayDialog?>(null)
     private val resumePrompt = MutableStateFlow<ResumePrompt?>(null)
@@ -127,6 +128,7 @@ class HomeViewModel(
             },
             hasAllFilesAccess = perm.first,
             hasNotificationPermission = perm.second,
+            needsUsageAccess = perm.third,
             preview = dl.preview,
             play = dl.play,
             resumePrompt = dl.resume,
@@ -141,7 +143,11 @@ class HomeViewModel(
 
     /** 画面に戻ってきたときに呼ぶ。サーバーの状態、ロック、手元の状態を読み直す */
     fun refresh() {
-        permissions.value = Permissions.hasAllFilesAccess() to Permissions.hasNotificationPermission(app)
+        permissions.value = Triple(Permissions.hasAllFilesAccess(), Permissions.hasNotificationPermission(app), false)
+        viewModelScope.launch {
+            val needs = container.settingsStore.current().autoFinishEnabled && !Permissions.hasUsageAccess(app)
+            permissions.update { it.copy(third = needs) }
+        }
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             val targets = db.targets().getAll()
@@ -254,7 +260,10 @@ class HomeViewModel(
 
     /** 6. 「プレイ中」の通知を出し、7. エミュを起動する */
     private suspend fun launchEmulator(t: TargetEntity, session: PlaySessionEntity) {
-        Notifications.showPlaying(app, t.name, machineOf(t.name), session.online)
+        // 自動送信が使えるなら、見張り（前面サービス）の通知が「プレイ中」を兼ねる
+        if (!PlayWatchService.startIfEnabled(app)) {
+            Notifications.showPlaying(app, t.name, machineOf(t.name), session.online)
+        }
         val intent = t.emuPackage?.let { withContext(Dispatchers.IO) { container.launcherApps.launchIntent(it) } }
         if (intent == null) {
             play.value = PlayDialog.Error(t.name, machineOf(t.name), UiText(R.string.err_emu_missing))

@@ -1,6 +1,7 @@
 package com.emustation.emusync.work
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -12,12 +13,14 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.emustation.emusync.MainActivity
 import com.emustation.emusync.R
+import com.emustation.emusync.domain.play.WatchItem
 
 object Notifications {
     const val CHANNEL_SYNC = "sync"
     const val CHANNEL_PLAY = "play"
     const val CHANNEL_RESULT = "result"
     const val ID_SYNC_PROGRESS = 1
+    const val ID_PLAY_WATCH = 4
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -77,6 +80,72 @@ object Notifications {
             .addAction(finishAction(context, target, R.string.action_finish_play))
             .build(),
     )
+
+    /**
+     * 自動送信の見張り中の通知（前面サービスの通知。「プレイ中」を兼ねる）
+     * @param minutes エミュが前面から消えてから送るまでの分数
+     */
+    fun playWatch(context: Context, items: List<WatchItem>, minutes: Int): Notification {
+        val now = System.currentTimeMillis()
+        val playing = items.filter {
+            it is WatchItem.Playing || it is WatchItem.Resumed
+        }
+        val machine = { t: String -> PlayWatchService.machine(t) }
+        val title = when {
+            playing.isNotEmpty() -> context.getString(R.string.notif_playing, playing.joinToString("・") { machine(it.target) })
+            else -> context.getString(R.string.notif_watch_title)
+        }
+        val lines = items.map {
+            when (it) {
+                is WatchItem.Playing ->
+                    if (it.remainingMs == null) context.getString(R.string.notif_watch_playing, machine(it.target), minutes)
+                    else context.getString(R.string.notif_watch_away, machine(it.target), formatMmSs(it.remainingMs))
+                is WatchItem.Resumed ->
+                    context.getString(R.string.notif_watch_playing, machine(it.target), minutes)
+                is WatchItem.Finishing ->
+                    context.getString(R.string.notif_watch_finishing, machine(it.target))
+                is WatchItem.Grace ->
+                    context.getString(R.string.notif_watch_grace, machine(it.target), ((it.untilMs - now) / 60_000 + 1).toInt())
+            }
+        }
+        val text = lines.joinToString("\n").ifEmpty { context.getString(R.string.notif_watch_starting) }
+        val b = NotificationCompat.Builder(context, CHANNEL_PLAY)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openApp(context))
+        playing.firstOrNull()?.let { b.addAction(finishAction(context, it.target, R.string.action_finish_play)) }
+        return b.build()
+    }
+
+    fun updatePlayWatch(context: Context, n: Notification) = notify(context, ID_PLAY_WATCH, n)
+
+    /** 自動で送ったあとでエミュに戻ってきたので、プレイ中に戻した */
+    fun showResumed(context: Context, target: String, machine: String, lockedBy: String?) {
+        if (lockedBy == null) {
+            cancel(context, playId(target)) // 「送信しました」の通知は消す
+            return
+        }
+        notify(
+            context, playId(target),
+            NotificationCompat.Builder(context, CHANNEL_RESULT)
+                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setContentTitle(context.getString(R.string.notif_resumed_locked, machine, lockedBy))
+                .setContentText(context.getString(R.string.notif_resumed_locked_text))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(context.getString(R.string.notif_resumed_locked_text)))
+                .setAutoCancel(true)
+                .setContentIntent(openApp(context))
+                .build(),
+        )
+    }
+
+    private fun formatMmSs(ms: Long): String {
+        val s = (ms + 999) / 1000
+        return "%d:%02d".format(s / 60, s % 60)
+    }
 
     /** 送信の結果。プレイ中の通知を置き換える */
     fun showFinished(context: Context, target: String, title: String, text: String) = notify(
@@ -148,7 +217,7 @@ object Notifications {
 
     fun cancel(context: Context, id: Int) = NotificationManagerCompat.from(context).cancel(id)
 
-    private fun notify(context: Context, id: Int, n: android.app.Notification) {
+    private fun notify(context: Context, id: Int, n: Notification) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED && android.os.Build.VERSION.SDK_INT >= 33
         ) {

@@ -64,7 +64,7 @@ PY
 
 echo "== サーバー起動中"
 EMUSYNC_IT_DOWN=0 run_tests
-check ServerIntegrationTest=4 RealServerScenarioTest=7 PythonInteropTest=4 RealServerPlayTest=9 RealServerResolveTest=7
+check ServerIntegrationTest=4 RealServerScenarioTest=7 PythonInteropTest=4 RealServerPlayTest=11 RealServerResolveTest=7
 
 echo "== サーバー停止後"
 kill "$SERVER_PID"; wait "$SERVER_PID" 2>/dev/null || true; SERVER_PID=

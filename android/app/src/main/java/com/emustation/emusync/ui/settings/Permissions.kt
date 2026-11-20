@@ -33,6 +33,19 @@ object Permissions {
         }
     }
 
+    /** 「使用状況へのアクセス」（自動送信で、エミュが前面にいるかを調べるため） */
+    fun hasUsageAccess(context: Context): Boolean =
+        com.emustation.emusync.data.apps.ForegroundTracker.hasUsageAccess(context)
+
+    fun openUsageAccessSettings(context: Context) {
+        val withPackage = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:${context.packageName}".toUri())
+        try {
+            context.startActivity(withPackage)
+        } catch (_: ActivityNotFoundException) {
+            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+    }
+
     /** 通知の設定画面を開く（実行時の許可を拒否されたあと用） */
     fun openNotificationSettings(context: Context) {
         context.startActivity(

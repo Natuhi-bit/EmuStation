@@ -215,4 +215,21 @@
     <string name="err_file_too_large">ファイルが大きすぎます（サーバーの上限を超えています）</string>
     <string name="err_no_space">端末の空き容量が足りません</string>
     <string name="err_file_access">ファイルを読み書きできません（%1$s）</string>
+
+    <!-- 自動送信（エミュが終わったら送る） -->
+    <string name="section_auto_finish">自動送信</string>
+    <string name="label_auto_finish">エミュを閉じたら自動で送信する</string>
+    <string name="hint_auto_finish">「遊ぶ」で起動したエミュが前面から消えて、そのまま戻ってこなければ、終わったとみなして送信します（画面が消えている間は数えません）。送信のあと 10 分以内にエミュに戻れば、プレイ中に戻ります</string>
+    <string name="label_auto_finish_minutes">送るまでの待ち時間</string>
+    <string name="minutes_value">%1$d 分</string>
+    <string name="perm_usage_access">使用状況へのアクセス（自動送信に必要）</string>
+    <string name="banner_usage_access">エミュを閉じたら自動で送信するには、「使用状況へのアクセス」を許可してください</string>
+    <string name="notif_watch_title">emusync</string>
+    <string name="notif_watch_starting">エミュを起動しています…</string>
+    <string name="notif_watch_playing">%1$s：エミュを閉じると、%2$d 分後に自動で送信します</string>
+    <string name="notif_watch_away">%1$s：エミュから離れました。あと %2$s で送信します（戻れば送りません）</string>
+    <string name="notif_watch_finishing">%1$s：送信しています…</string>
+    <string name="notif_watch_grace">%1$s：送信しました。%2$d 分以内にエミュに戻ると、プレイ中に戻ります</string>
+    <string name="notif_resumed_locked">%1$s：%2$s がプレイ中です</string>
+    <string name="notif_resumed_locked_text">エミュに戻りましたが、ほかの端末がロックを持っています。両方で遊ぶと、セーブが競合するおそれがあります</string>
 </resources>

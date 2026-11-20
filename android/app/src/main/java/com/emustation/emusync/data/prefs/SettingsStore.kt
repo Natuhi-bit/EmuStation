@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.emustation.emusync.domain.periodic.PeriodicNoticeState
@@ -25,6 +26,10 @@ data class AppSettings(
     val caFileName: String? = null,
     /** 定期送信の有効・無効（段階 6 で使う） */
     val periodicPushEnabled: Boolean = true,
+    /** エミュが終わったら自動で送信する */
+    val autoFinishEnabled: Boolean = true,
+    /** エミュが前面から消えてから、終わったとみなすまでの分数 */
+    val autoFinishMinutes: Int = 2,
     /** トークンは保存されているが復号できなかった */
     val tokenUnreadable: Boolean = false,
     /** サーバーに登録されたこの端末の名前（最後に ping が成功したときの値） */
@@ -45,6 +50,8 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) : Periodi
             token = token.orEmpty(),
             caFileName = p[KEY_CA_FILE],
             periodicPushEnabled = p[KEY_PERIODIC] ?: true,
+            autoFinishEnabled = p[KEY_AUTO_FINISH] ?: true,
+            autoFinishMinutes = p[KEY_AUTO_FINISH_MINUTES] ?: 2,
             tokenUnreadable = enc != null && token == null,
             deviceName = p[KEY_DEVICE_NAME],
         )
@@ -68,6 +75,13 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) : Periodi
         store.edit { p -> p[KEY_DEVICE_NAME] = name }
     }
 
+    suspend fun setAutoFinish(enabled: Boolean, minutes: Int) {
+        store.edit { p ->
+            p[KEY_AUTO_FINISH] = enabled
+            p[KEY_AUTO_FINISH_MINUTES] = minutes
+        }
+    }
+
     suspend fun setPeriodicPushEnabled(enabled: Boolean) {
         store.edit { p -> p[KEY_PERIODIC] = enabled }
     }
@@ -89,6 +103,8 @@ class SettingsStore(context: Context, private val cipher: TokenCipher) : Periodi
         val KEY_TOKEN_ENC = stringPreferencesKey("token_enc")
         val KEY_CA_FILE = stringPreferencesKey("ca_file")
         val KEY_PERIODIC = booleanPreferencesKey("periodic_push")
+        val KEY_AUTO_FINISH = booleanPreferencesKey("auto_finish")
+        val KEY_AUTO_FINISH_MINUTES = intPreferencesKey("auto_finish_minutes")
         val KEY_DEVICE_NAME = stringPreferencesKey("device_name")
         val KEY_REMINDED = stringSetPreferencesKey("periodic_reminded_sessions")
         val KEY_LAST_ERROR = stringPreferencesKey("periodic_last_error")

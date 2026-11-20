@@ -86,6 +86,8 @@ data class HomeUiState(
     val rows: List<TargetRow> = emptyList(),
     val hasAllFilesAccess: Boolean = true,
     val hasNotificationPermission: Boolean = true,
+    /** 自動送信が有効なのに「使用状況へのアクセス」がない */
+    val needsUsageAccess: Boolean = false,
     val preview: PreviewState? = null,
     val play: PlayDialog? = null,
     val resumePrompt: ResumePrompt? = null,

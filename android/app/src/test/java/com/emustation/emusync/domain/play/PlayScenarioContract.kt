@@ -270,4 +270,38 @@ abstract class PlayScenarioContract {
     fun finishWithoutSession_doesNothing() {
         assertEquals(FinishResult.NoSession, a.finish())
     }
+
+    // ---------------------------------------------------------------- 自動送信のあとでエミュに戻った
+
+    @Test
+    fun resumeAfterAutoFinish_relocksWithoutPull() {
+        assertTrue(a.start() is StartResult.Ready)
+        a.write(data, "played")
+        assertTrue(a.finish() is FinishResult.Done) // 自動で送った
+        assertNull(lockHolder(targetName))
+
+        // 送ったあとで、ほかの端末がサーバーを更新していても、取得はしない（エミュが開いているので）
+        b.sync()
+        b.write(data, "B edit")
+        b.sync()
+
+        val r = runBlocking { a.manager.resumeAfterAutoFinish(targetName) }
+        assertNull(r.lockedBy)
+        assertEquals(true, r.session.online)
+        assertEquals(deviceName("A"), lockHolder(targetName))
+        assertEquals("played", a.read(data))
+        assertNotNull(a.session())
+    }
+
+    @Test
+    fun resumeAfterAutoFinish_whenOtherDeviceLocked_continuesOffline() {
+        assertTrue(a.start() is StartResult.Ready)
+        assertTrue(a.finish() is FinishResult.Done)
+        assertTrue(b.start() is StartResult.Ready)
+
+        val r = runBlocking { a.manager.resumeAfterAutoFinish(targetName) }
+        assertEquals(deviceName("B"), r.lockedBy)
+        assertEquals(false, r.session.online)
+        assertEquals(deviceName("B"), lockHolder(targetName)) // 奪わない
+    }
 }

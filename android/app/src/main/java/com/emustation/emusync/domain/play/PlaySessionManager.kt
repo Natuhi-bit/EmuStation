@@ -35,6 +35,8 @@ sealed interface StartResult {
     data class Failed(val message: UiText) : StartResult
 }
 
+data class ResumeResult(val session: PlaySessionEntity, val lockedBy: String?)
+
 /** プレイ後の送信の結果（設計書 §5.2） */
 sealed interface FinishResult {
     data object NoSession : FinishResult
@@ -123,6 +125,33 @@ class PlaySessionManager(
     /** 競合を無視して起動する（ロックは [start] で取得済み） */
     suspend fun startIgnoringConflicts(target: String): StartResult.Ready =
         StartResult.Ready(begin(target, online = true), null)
+
+    /**
+     * 自動で送ったあとで、エミュに戻ってきた（まだ遊んでいた）。プレイ中に戻す。
+     * 手元のセーブが最新なので、取得はしない。ロックは取り直す（他の端末が持っていれば、オフラインとして続ける）
+     *
+     * @return 他の端末がロックを持っていれば、その端末名
+     */
+    suspend fun resumeAfterAutoFinish(target: String): ResumeResult {
+        sessions.get(target)?.let { return ResumeResult(it, null) }
+        var online = false
+        var lockedBy: String? = null
+        locks()?.let { api ->
+            try {
+                api.lock(target, PLAY_LOCK_TTL, force = false)
+                online = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException.Locked423) {
+                lockedBy = e.device
+            } catch (_: Exception) {
+                // つながらない。オフラインのプレイセッションとして続ける
+            }
+        }
+        val s = PlaySessionEntity(target, clock(), online)
+        sessions.upsert(s)
+        return ResumeResult(s, lockedBy)
+    }
 
     /** 競合が出たあとで起動をやめる。ロックを解除する */
     suspend fun abort(target: String) {

@@ -191,6 +191,7 @@ private fun HomeRouteScreen(app: EmusyncApp, nav: NavController) {
                 }
             }
             override fun dismissPreview() = vm.dismissPreview()
+            override fun requestUsageAccess() = Permissions.openUsageAccessSettings(context)
             override fun play(target: String) = vm.play(target)
             override fun playForce(target: String) = vm.playForce(target)
             override fun playOffline(target: String) = vm.playOffline(target)

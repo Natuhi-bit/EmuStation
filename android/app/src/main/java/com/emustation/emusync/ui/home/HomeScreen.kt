@@ -82,6 +82,7 @@ interface HomeActions {
     fun openSettings()
     fun requestAllFilesAccess()
     fun requestNotificationPermission()
+    fun requestUsageAccess()
     fun dismissPreview()
 
     // ---- 遊ぶ（設計書 §5）
@@ -163,6 +164,16 @@ fun HomeContent(
                         stringResource(R.string.banner_notifications),
                         stringResource(R.string.action_grant),
                         actions::requestNotificationPermission,
+                        error = false,
+                    )
+                }
+            }
+            if (state.needsUsageAccess && state.rows.isNotEmpty()) {
+                item {
+                    Banner(
+                        stringResource(R.string.banner_usage_access),
+                        stringResource(R.string.action_grant),
+                        actions::requestUsageAccess,
                         error = false,
                     )
                 }

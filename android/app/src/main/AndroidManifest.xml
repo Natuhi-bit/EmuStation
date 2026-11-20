@@ -9,6 +9,13 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 自動送信：エミュが前面にいるかを調べる（「使用状況へのアクセス」。設定画面で許可してもらう） -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- 自動送信：プレイ中だけ動く見張り（前面サービス） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- 設計書 §8.3：ランチャーアプリの一覧を取得するため -->
     <queries>
@@ -36,6 +43,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 自動送信の見張り（プレイ中だけ動く） -->
+        <service
+            android:name=".work.PlayWatchService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Watches whether the emulator the user started is still in the foreground, and uploads the game saves when it closes" />
+        </service>
 
         <!-- 通知の [送信して終了] / [再試行] -->
         <receiver

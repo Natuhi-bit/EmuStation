@@ -54,6 +54,8 @@ data class SettingsUiState(
     val ca: CaInfo? = null,
     val test: TestState = TestState.Idle,
     val periodicPush: Boolean = true,
+    val autoFinish: Boolean = true,
+    val autoFinishMinutes: Int = 2,
 ) {
     val dirty: Boolean get() = serverUrl.trim() != savedServerUrl || token.trim() != savedToken
 }
@@ -83,6 +85,8 @@ class SettingsViewModel(
                     tokenUnreadable = s.tokenUnreadable,
                     caFileName = s.caFileName,
                     periodicPush = s.periodicPushEnabled,
+                    autoFinish = s.autoFinishEnabled,
+                    autoFinishMinutes = s.autoFinishMinutes,
                     ca = s.caFileName?.let { name ->
                         withContext(Dispatchers.IO) { container.caStore.load(name) }?.toInfo()
                     },
@@ -98,6 +102,12 @@ class SettingsViewModel(
             container.settingsStore.setPeriodicPushEnabled(enabled)
             PeriodicPushWorker.schedule(app, enabled)
         }
+    }
+
+    /** エミュを閉じたら自動で送信する（有効・無効と、待ち時間） */
+    fun setAutoFinish(enabled: Boolean, minutes: Int) {
+        _state.update { it.copy(autoFinish = enabled, autoFinishMinutes = minutes) }
+        viewModelScope.launch { container.settingsStore.setAutoFinish(enabled, minutes) }
     }
 
     fun onServerUrlChange(v: String) = _state.update { it.copy(serverUrl = v, test = TestState.Idle) }
