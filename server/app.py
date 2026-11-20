@@ -183,14 +183,29 @@ async def put_file(
     sha = hashlib.sha256(body).hexdigest()
     if sha != x_sha256.lower():
         raise HTTPException(400, "転送中に内容が壊れました（ハッシュ不一致）")
+    return put_version(path, body, device, base_version)
 
-    # 先に実体を書く（同じ内容なら既にある）
+
+def write_blob(data: bytes) -> str:
+    """実体を SHA-256 の名前で書く（同じ内容なら既にある）。返り値は SHA-256"""
+    sha = hashlib.sha256(data).hexdigest()
     bp = blob_path(sha)
     if not bp.exists():
         bp.parent.mkdir(parents=True, exist_ok=True)
         tmp = bp.with_suffix(".tmp" + secrets.token_hex(4))
-        tmp.write_bytes(body)
+        tmp.write_bytes(data)
         os.replace(tmp, bp)
+    return sha
+
+
+def put_version(path: str, data: bytes, device: str, base_version: int | None) -> dict:
+    """
+    新しい版を作る。内容が今の版と同じなら版を進めない（unchanged）。
+    base_version を指定すると楽観ロック（今の版と違えば 409）。None なら確かめない（管理画面のインポート用）
+    """
+    # 先に実体を書く（同じ内容なら既にある）
+    sha = write_blob(data)
+    body = data
 
     now = time.time()
     with db() as conn:
@@ -198,7 +213,7 @@ async def put_file(
         try:
             row = conn.execute("SELECT version, sha256 FROM files WHERE path=?", (path,)).fetchone()
             current = row["version"] if row else 0
-            if current != base_version:
+            if base_version is not None and current != base_version:
                 conn.execute("ROLLBACK")
                 raise HTTPException(
                     409,
@@ -254,6 +269,12 @@ class RestoreReq(BaseModel):
 def restore(path: str, req: RestoreReq, device: str = Depends(current_device)):
     """過去の版の内容を「新しい版」として最新にする（履歴は消さない）"""
     check_path(path)
+    return restore_version(path, req.version, device)
+
+
+def restore_version(path: str, version: int, device: str) -> dict:
+    """版 version の内容を新しい版として最新にする。記録する端末名は「<device>(restore v<版>)」"""
+    req = RestoreReq(version=version)
     now = time.time()
     with db() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -323,16 +344,22 @@ def list_locks(device: str = Depends(current_device)):
 
 
 # ---------------------------------------------------------------- 管理コマンド
+def register_device(name: str) -> str:
+    """端末を登録（同じ名前なら置き換え）して、新しいトークンを返す。トークンは保存しない（ハッシュだけ）"""
+    token = secrets.token_urlsafe(32)
+    with db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO devices VALUES(?,?,?)",
+            (name, hashlib.sha256(token.encode()).hexdigest(), time.time()),
+        )
+    return token
+
+
 def _cli() -> None:
     init_storage()
     if len(sys.argv) >= 3 and sys.argv[1] == "add-device":
         name = sys.argv[2]
-        token = secrets.token_urlsafe(32)
-        with db() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO devices VALUES(?,?,?)",
-                (name, hashlib.sha256(token.encode()).hexdigest(), time.time()),
-            )
+        token = register_device(name)
         print(f"端末 '{name}' を登録しました。このトークンをクライアント設定に書いてください（再表示できません）:")
         print(token)
     elif len(sys.argv) >= 3 and sys.argv[1] == "remove-device":
@@ -343,8 +370,28 @@ def _cli() -> None:
         with db() as conn:
             for r in conn.execute("SELECT name, created_at FROM devices"):
                 print(r["name"], time.strftime("%Y-%m-%d %H:%M", time.localtime(r["created_at"])))
+    elif len(sys.argv) >= 2 and sys.argv[1] == "set-admin-password":
+        import getpass
+        pw = getpass.getpass("管理画面のパスワード（8文字以上）: ")
+        if len(pw) < 8:
+            sys.exit("8文字以上にしてください")
+        if getpass.getpass("もう一度: ") != pw:
+            sys.exit("一致しません")
+        ADMIN.set_admin_password(pw)
+        print("設定しました。ブラウザで https://<サーバー>/emusync/admin/ を開いてください")
     else:
-        print("使い方: python3 app.py add-device <名前> | remove-device <名前> | list-devices")
+        print("使い方: python3 app.py add-device <名前> | remove-device <名前> | list-devices | set-admin-password")
+
+
+# ---------------------------------------------------------------- 管理画面（/admin/）
+import admin as _admin  # noqa: E402
+
+ADMIN = _admin.Core(
+    db=db, data_dir=DATA_DIR, blob_path=blob_path, check_path=check_path, check_target=check_target,
+    put_version=put_version, restore_version=restore_version, register_device=register_device,
+    max_bytes=MAX_BYTES,
+)
+app.include_router(_admin.build_router(ADMIN))
 
 
 if __name__ == "__main__":

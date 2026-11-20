@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>emusync 管理</title>
+<link rel="stylesheet" href="static/admin.css">
+</head>
+<body>
+<header class="bar">
+  <h1>emusync 管理</h1>
+  <button id="logout" class="ghost" hidden>ログアウト</button>
+</header>
+
+<main>
+  <!-- ログイン -->
+  <section id="login-view" class="card narrow" hidden>
+    <h2>ログイン</h2>
+    <p id="not-configured" class="warn" hidden>
+      管理者パスワードが設定されていません。サーバーで次を実行してください。<br>
+      <code>cd /opt/emusync/server && sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.py set-admin-password</code>
+    </p>
+    <form id="login-form">
+      <label>パスワード <input type="password" id="password" autocomplete="current-password" required></label>
+      <button type="submit">ログイン</button>
+      <p id="login-error" class="error" hidden></p>
+    </form>
+  </section>
+
+  <!-- 管理画面 -->
+  <div id="app-view" hidden>
+    <nav class="tabs" role="tablist">
+      <button data-tab="overview" class="active">概要</button>
+      <button data-tab="files">ファイル</button>
+      <button data-tab="import">インポート</button>
+      <button data-tab="devices">端末</button>
+      <button data-tab="locks">ロック</button>
+    </nav>
+
+    <section data-panel="overview">
+      <div id="stats" class="stats"></div>
+      <div class="card">
+        <h2>ターゲット</h2>
+        <table class="list"><thead><tr><th>名前</th><th class="num">ファイル</th><th class="num">サイズ</th><th>最終更新</th></tr></thead>
+          <tbody id="targets"></tbody></table>
+        <p id="targets-empty" class="muted" hidden>まだファイルがありません。「インポート」から取り込めます。</p>
+      </div>
+    </section>
+
+    <section data-panel="files" hidden>
+      <div class="card">
+        <div class="row">
+          <label>ターゲット <select id="file-target"></select></label>
+          <label class="grow">絞り込み <input id="file-filter" type="search" placeholder="パスの一部"></label>
+        </div>
+        <table class="list files-table"><thead><tr><th>パス</th><th class="num">版</th><th class="num">サイズ</th><th>更新</th><th>端末</th></tr></thead>
+          <tbody id="files"></tbody></table>
+        <p id="files-empty" class="muted" hidden>ファイルがありません。</p>
+      </div>
+      <div id="history" class="card" hidden>
+        <h2>版の履歴 <code id="history-path"></code></h2>
+        <table class="list versions-table"><thead><tr><th>版</th><th>日時</th><th class="num">サイズ</th><th>端末</th><th>SHA-256</th><th></th></tr></thead>
+          <tbody id="versions"></tbody></table>
+      </div>
+    </section>
+
+    <section data-panel="import" hidden>
+      <div class="card">
+        <h2>1. アップロード</h2>
+        <p class="muted">Nextcloud などにあるセーブデータを取り込みます。中身が端末のセーブフォルダと同じ並びになっているフォルダ（PSP なら SAVEDATA、PS2 なら memcards）を選んでください。</p>
+        <div class="row">
+          <label>ターゲット <input id="imp-target" list="target-names" required placeholder="psp / vita / ps2 / ps3"></label>
+          <datalist id="target-names"></datalist>
+        </div>
+        <div class="row">
+          <label class="file">フォルダを選ぶ <input type="file" id="imp-folder" webkitdirectory multiple></label>
+          <span class="muted">または</span>
+          <label class="file">zip を選ぶ <input type="file" id="imp-zip" accept=".zip,application/zip"></label>
+        </div>
+        <p id="imp-chosen" class="muted"></p>
+        <button id="imp-upload" disabled>アップロードしてプレビュー</button>
+        <progress id="imp-progress" max="100" value="0" hidden></progress>
+        <p id="imp-error" class="error" hidden></p>
+      </div>
+
+      <div id="imp-step2" class="card" hidden>
+        <h2>2. 確認して取り込む</h2>
+        <div class="row">
+          <label id="imp-strip-label" class="check"><input type="checkbox" id="imp-strip" checked> 先頭のフォルダ「<span id="imp-top"></span>」を外す</label>
+        </div>
+        <div class="row">
+          <label class="grow">置き先のフォルダ（ターゲットの中。空なら直下） <input id="imp-prefix" placeholder="例 ULJM05800"></label>
+        </div>
+        <label>除外パターン（1行に1つ。相対パス全体とファイル名の両方に照合）
+          <textarea id="imp-excludes" rows="3"></textarea></label>
+        <label class="check"><input type="checkbox" id="imp-updates"> サーバーと内容が違う既存のファイルも、新しい版として取り込む
+          <span class="muted">（今の版は履歴に残ります。端末側で変えていたファイルは、次の同期で競合になります）</span></label>
+        <div id="imp-counts" class="chips"></div>
+        <table class="list"><thead><tr><th>状態</th><th>サーバー上のパス</th><th class="num">サイズ</th></tr></thead>
+          <tbody id="imp-items"></tbody></table>
+        <div class="row">
+          <button id="imp-commit">取り込む</button>
+          <button id="imp-cancel" class="ghost">やめる</button>
+        </div>
+        <p id="imp-result" class="ok" hidden></p>
+      </div>
+    </section>
+
+    <section data-panel="devices" hidden>
+      <div class="card">
+        <h2>端末</h2>
+        <table class="list"><thead><tr><th>名前</th><th>登録日時</th><th></th></tr></thead>
+          <tbody id="devices"></tbody></table>
+      </div>
+      <div class="card">
+        <h2>端末を追加</h2>
+        <form id="device-form" class="row">
+          <label class="grow">端末名 <input id="device-name" required pattern="[A-Za-z0-9._\-]+" placeholder="android-phone"></label>
+          <button type="submit">トークンを発行</button>
+        </form>
+        <div id="token-box" class="token" hidden>
+          <p><strong id="token-device"></strong> のトークン（再表示できません。アプリの設定に貼り付けてください）</p>
+          <div class="row"><code id="token"></code><button id="token-copy" class="ghost">コピー</button></div>
+        </div>
+        <p id="device-error" class="error" hidden></p>
+      </div>
+    </section>
+
+    <section data-panel="locks" hidden>
+      <div class="card">
+        <h2>プレイ中ロック</h2>
+        <p class="muted">端末が「遊ぶ」で取ったロックです。端末が壊れた・送信せずに放置した、などで残っている場合に解除できます。</p>
+        <table class="list"><thead><tr><th>ターゲット</th><th>端末</th><th>期限</th><th></th></tr></thead>
+          <tbody id="locks"></tbody></table>
+        <p id="locks-empty" class="muted" hidden>プレイ中のロックはありません。</p>
+      </div>
+    </section>
+  </div>
+</main>
+<div id="toast" class="toast" hidden></div>
+<script src="static/admin.js"></script>
+</body>
+</html>

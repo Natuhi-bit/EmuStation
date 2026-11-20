@@ -47,6 +47,29 @@ sudo nginx -t && sudo systemctl reload nginx
 curl -k -H "Authorization: Bearer <トークン>" https://192.168.50.49/emusync/api/ping
 ```
 
+### 管理画面（ブラウザ）
+`https://<サーバー>/emusync/admin/` で、ブラウザからサーバーを管理できる（Nginx の `allow` の範囲からだけ開ける）。
+
+- **概要**：ターゲットごとのファイル数・容量、版の数、端末の数、プレイ中ロック
+- **ファイル**：ターゲットの中のファイルの一覧、版の履歴、版ごとのダウンロード、「この版に戻す」（復元）
+- **インポート**：フォルダか zip をアップロードして、ターゲットに取り込む。先にプレビューで「新規・同じ・内容が違う・除外」を確かめられる。
+  既定では新規のファイルだけを取り込み、内容が違う既存のファイルは、選んだときだけ新しい版として取り込む（今の版は履歴に残る）。
+  取り込んだ版の端末名は `admin-import`
+- **端末**：端末の追加（トークンの発行）と削除
+- **ロック**：プレイ中ロックの一覧と、強制解除
+
+最初に、管理者パスワードを設定する（変えるときも同じ。変えると、ログイン中のブラウザはログアウトされる）。
+```bash
+cd /opt/emusync/server
+sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.py set-admin-password
+```
+
+サーバーのテスト：
+```bash
+pip install pytest httpx -r server/requirements.txt
+python -m pytest server/tests
+```
+
 ### 調整用の環境変数（emusync.service の Environment=）
 | 変数 | 既定値 | 内容 |
 |---|---|---|
