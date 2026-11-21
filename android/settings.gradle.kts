@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "emusync"
 include(":app")
 include(":core")
+include(":desktop")
