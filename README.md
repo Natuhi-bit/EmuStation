@@ -114,7 +114,7 @@ py client\emusync.py -c client\config.yaml sync
 
 ```bat
 @echo off
-py "C:\emusync\client\emusync.py" -c "C:\emusync\client\config.yaml" run ppsspp %*
+py "C:\emusync\client\emusync.py" -c "C:\emusync\client\config.yaml" run psp %*
 if errorlevel 1 pause
 ```
 
