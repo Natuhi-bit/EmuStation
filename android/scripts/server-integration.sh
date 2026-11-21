@@ -33,11 +33,15 @@ cd "$ROOT/android"
 export EMUSYNC_IT_URL="http://127.0.0.1:$PORT" EMUSYNC_IT_TOKEN="$TOKEN" EMUSYNC_IT_DEVICE="it-android"
 export EMUSYNC_IT_TOKEN_B="$TOKEN_B" EMUSYNC_IT_PYTHON="$WORK/venv/bin/python" EMUSYNC_IT_CLIENT="$ROOT/client/emusync.py"
 
-CLASSES=(ServerIntegrationTest RealServerScenarioTest PythonInteropTest RealServerPlayTest RealServerResolveTest)
+# 共通モジュール（:core）と Android アプリ（:app）のテスト
+CORE_CLASSES=(ServerIntegrationTest RealServerScenarioTest PythonInteropTest)
+APP_CLASSES=(RealServerPlayTest RealServerResolveTest)
 run_tests() {
-  local args=()
-  for c in "${CLASSES[@]}"; do args+=(--tests "*.$c"); done
-  ./gradlew -q --max-workers 2 testDebugUnitTest "${args[@]}" --rerun
+  local args=(:core:test)
+  for c in "${CORE_CLASSES[@]}"; do args+=(--tests "*.$c"); done
+  args+=(--rerun :app:testDebugUnitTest)
+  for c in "${APP_CLASSES[@]}"; do args+=(--tests "*.$c"); done
+  ./gradlew -q --max-workers 2 "${args[@]}" --rerun
 }
 
 # テスト結果の XML から、クラスごとに「実行（スキップ以外）された件数」と失敗の件数を出し、期待値と照合する
@@ -48,7 +52,7 @@ import glob, sys, xml.etree.ElementTree as ET
 ok = True
 for arg in sys.argv[1:]:
     cls, want = arg.split("=")
-    r = ET.parse(glob.glob(f"app/build/test-results/testDebugUnitTest/TEST-*.{cls}.xml")[0]).getroot()
+    r = ET.parse(glob.glob(f"*/build/test-results/*/TEST-*.{cls}.xml")[0]).getroot()
     for c in r.iter("testcase"):
         state = "skip" if c.find("skipped") is not None else (
             "FAIL" if c.find("failure") is not None or c.find("error") is not None else "pass")

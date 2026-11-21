@@ -7,8 +7,7 @@ import com.emustation.emusync.data.api.ApiException
 fun connectionErrorText(e: Throwable): UiText = when (e) {
     is ApiException.Unauthorized -> UiText(R.string.conn_unauthorized)
     is ApiException.Offline ->
-        if (e.httpCode != null) UiText(R.string.conn_server_down, e.httpCode)
-        else UiText(R.string.conn_offline)
+        e.httpCode?.let { UiText(R.string.conn_server_down, it) } ?: UiText(R.string.conn_offline)
     is ApiException.Tls -> when (e.kind) {
         ApiException.Tls.Kind.UNTRUSTED -> UiText(R.string.conn_tls_untrusted)
         ApiException.Tls.Kind.HOSTNAME -> UiText(R.string.conn_tls_hostname)
