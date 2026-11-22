@@ -44,7 +44,8 @@ compose.desktop {
             packageVersion = "1.0.0"
             vendor = "emusync"
             description = "エミュのセーブを自宅サーバーと同期するランチャー"
-            modules("java.naming", "jdk.crypto.ec", "java.net.http")
+            // suggestRuntimeModules の結果 ＋ TLS（楕円曲線の暗号）
+            modules("java.instrument", "jdk.unsupported", "jdk.crypto.ec", "java.naming")
             windows {
                 iconFile.set(project.file("packaging/emusync.ico"))
                 menuGroup = "emusync"

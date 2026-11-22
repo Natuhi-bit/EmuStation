@@ -98,30 +98,53 @@ python -m pytest server/tests
 
 ---
 
-## 3. Windows クライアント
+## 3. Windows アプリ
+
+`android/desktop/` に Windows 用のアプリがある（Kotlin / Compose Desktop。同期の判定は Android 版と同じコードを使う）。
+
+- **Steam のように、アプリを通してエミュを起動する**：ゲームを選んで Enter → ロック → クラウドと同期 → エミュを起動 →
+  ゲームを閉じたら自動でクラウドに保存 → ロック解除。ほかの端末がプレイ中なら知らせる（奪って起動もできる）。
+  つながらないときは同期せずに起動し、つながったときに自動で送る
+- **PS3 の XMB 風の画面**：カテゴリー（設定・ゲーム・セーブデータ・ネットワーク）を横、項目を縦に並べる。
+  キーボード（←→↑↓・Enter・Tab でオプション・Esc）とマウスで操作する。F11 で全画面。背景の色はテーマで変えられる
+- **タスクトレイに常駐**：ウィンドウを閉じてもトレイに残る。Windows の起動時に起動できる。1時間ごとに手元の変更を送る
+- **設定はすべて画面で**：サーバー（URL・トークン・CA 証明書・接続テスト）、エミュ（実行ファイル・引数・セーブのフォルダ）、
+  起動と常駐、テーマ。ゲームは1本ずつ追加するか、フォルダからまとめて探す
+- データは `%APPDATA%\emusync`。トークンは Windows の DPAPI で守る。前回同期の記録は Python 版と同じ形（`state\<ターゲット>.json`）
+
+### インストール
+GitHub の Actions の「Windows app」の実行結果から、Artifacts の **emusync-setup** をダウンロードして実行する
+（管理者の権限は要らない。`%LOCALAPPDATA%\Programs\emusync` に入る）。
+インストーラーで「Windows の起動時に起動する」と「デスクトップのアイコン」を選べる。
+
+最初に、設定 → サーバーで URL（例 `https://192.168.50.49/emusync`）とトークン（管理画面の「端末」で発行）を入れ、
+自己署名の証明書なら CA 証明書を取り込む。次に、設定 → 各機種で、エミュの実行ファイルとセーブのフォルダを選ぶ。
+
+| 機種 | エミュ | 既定の引数 | 備考 |
+|---|---|---|---|
+| psp | PPSSPP | `"{rom}"` | |
+| vita | Vita3K | `-r {rom}` | ROM の欄はタイトル ID（例 PCSG00001） |
+| ps2 | PCSX2 | `-batch -- "{rom}"` | `-batch`：ゲームを閉じたら PCSX2 も終わる |
+| ps3 | RPCS3 | `--no-gui "{rom}"` | ROM の欄は EBOOT.BIN か ISO |
+
+### 自分でビルドする
+```powershell
+cd android
+.\gradlew.bat :desktop:run                     # そのまま動かす
+.\gradlew.bat :desktop:createDistributable     # build\compose\binaries\main\app\emusync にアプリ
+iscc /DAppVersion=1.0.0 desktop\packaging\emusync.iss   # インストーラー（Inno Setup 6）
+```
+
+### Python 版（コマンドで使う）
+同期の動きの「正」として残してある（Android 版・Windows 版は、Python 版と全組み合わせで照合している）。
 
 ```powershell
 py -m pip install requests pyyaml
 copy client\config.example.yaml client\config.yaml   # 中身を編集
-py client\emusync.py -c client\config.yaml ping
 py client\emusync.py -c client\config.yaml sync --dry-run   # 最初は必ず確認
-py client\emusync.py -c client\config.yaml sync
+py client\emusync.py -c client\config.yaml run ps2          # ロック → 取得 → エミュ起動 → 終了後に送信
 ```
 
-### 普段の遊び方：エミュの起動を `run` 経由にする
-`run` は「ロック取得 → 取得 → エミュ起動 → 終了を待つ → 送信 → ロック解除」をまとめて行う。
-ターゲットごとに `.bat` を作って、デスクトップのショートカットをこれに置き換える：
-
-```bat
-@echo off
-py "C:\emusync\client\emusync.py" -c "C:\emusync\client\config.yaml" run psp %*
-if errorlevel 1 pause
-```
-
-- サーバーにつながらないときは、同期せずにそのまま起動する（次に `sync` したとき送信される。その間に別の端末でも遊んでいたら、競合として検出される）
-- 他の端末がロック中なら起動を止める。その端末の電源を落とし忘れたときなどは `--force` で奪える
-
-### コマンド一覧
 | コマンド | 内容 |
 |---|---|
 | `sync [ターゲット...]` | 双方向同期（`--dry-run`、`--prefer local/remote`） |
