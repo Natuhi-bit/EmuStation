@@ -3,6 +3,7 @@ package com.emustation.emusync.data.api
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
@@ -14,6 +15,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.net.InetAddress
 import java.net.Proxy
 import java.security.cert.CertificateException
 
@@ -53,7 +55,8 @@ class TlsConfigTest {
             .heldCertificate(leaf, ca.certificate)
             .build()
         server.useHttps(serverCerts.sslSocketFactory())
-        server.start()
+        // localhost が ::1 に解決される環境（GitHub Actions など）でも届くよう、IPv4 に固定する
+        server.start(LOOPBACK, 0)
         server.enqueue(
             MockResponse.Builder().code(200)
                 .body("""{"ok": true, "device": "d", "time": 1.0}""").build(),
@@ -61,7 +64,9 @@ class TlsConfigTest {
     }
 
     private fun client(pem: String?): OkHttpClient {
-        val base = HttpClients.base().newBuilder().proxy(Proxy.NO_PROXY).build()
+        val base = HttpClients.base().newBuilder().proxy(Proxy.NO_PROXY)
+            .dns { host -> if (host == "localhost") listOf(LOOPBACK) else Dns.SYSTEM.lookup(host) }
+            .build()
         return HttpClients.withCa(base, pem?.let { CaCertificates.parse(it.toByteArray()) })
     }
 
@@ -147,5 +152,9 @@ class TlsConfigTest {
         } catch (e: ApiException.Tls) {
             assertEquals(ApiException.Tls.Kind.HOSTNAME, e.kind)
         }
+    }
+
+    private companion object {
+        val LOOPBACK: InetAddress = InetAddress.getByAddress("localhost", byteArrayOf(127, 0, 0, 1))
     }
 }
