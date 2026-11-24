@@ -66,6 +66,9 @@ class AppController(
     val server: StateFlow<ServerStatus> = _server.asStateFlow()
 
     private val _systems = MutableStateFlow<Map<String, SystemStatus>>(emptyMap())
+
+    /** 機種ごとの、実行中の手動の同期の数 */
+    private val syncingNow = java.util.concurrent.ConcurrentHashMap<String, Int>()
     val systems: StateFlow<Map<String, SystemStatus>> = _systems.asStateFlow()
 
     private val _notices = MutableSharedFlow<Notice>(extraBufferCapacity = 8)
@@ -222,19 +225,26 @@ class AppController(
                 unsent = sync.unsentCount(s.target),
                 conflicts = records.conflicts(s.target).size,
                 lastSync = log.firstOrNull { it.target == s.target && !it.dryRun && it.fatal == null }?.startedAt,
-                syncing = _systems.value[s.target]?.syncing == true,
+                syncing = false,
             )
         }
-        _systems.value = m
+        // 「同期中」は、書き込むときの数で決める（調べている間に同期が終わっても「同期中」のまま残らないように）
+        _systems.update { m.mapValues { (t, st) -> st.copy(syncing = syncingNow.containsKey(t)) } }
         bump()
     }
 
     /** 手動の同期（今すぐ同期・取得のみ・送信のみ）。競合の解決は [only] と [prefer] を付ける */
     fun syncNow(target: String, mode: SyncMode = SyncMode.SYNC, prefer: Prefer? = null, only: Set<String>? = null) {
         scope.launch {
+            syncingNow.merge(target, 1, Int::plus)
             _systems.update { it + (target to (it[target] ?: SystemStatus(null, 0, null, false)).copy(syncing = true)) }
-            val o = sync.run(target, mode, prefer, only = only, trigger = "manual")
-            _systems.update { it + (target to it.getValue(target).copy(syncing = false)) }
+            val o = try {
+                sync.run(target, mode, prefer, only = only, trigger = "manual")
+            } finally {
+                // 同じ機種を続けて同期したときは、全部終わるまで「同期中」
+                syncingNow.compute(target) { _, n -> if (n == null || n <= 1) null else n - 1 }
+                _systems.update { m -> m[target]?.let { m + (target to it.copy(syncing = syncingNow.containsKey(target))) } ?: m }
+            }
             val machine = Presets.machineOf(target)
             when (o) {
                 is SyncOutcome.Done -> notify(
