@@ -27,6 +27,12 @@ dependencies {
 }
 
 tasks.withType<Test>().configureEach {
+    // CI のログで失敗の理由（モンキーテストの seed と直前の操作など）が見えるように
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStackTraces = false
+    }
     // ファイル名を UTF-8 で扱う（日本語などのファイル名のテストのため）
     environment("LC_ALL", "C.UTF-8")
 }
