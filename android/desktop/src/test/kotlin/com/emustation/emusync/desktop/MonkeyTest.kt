@@ -374,11 +374,14 @@ class MonkeyTest {
                     step(i)
                     compose.waitForIdle()
                 } catch (e: AssertionError) {
+                    // 操作しようとした要素が、その間に画面から消えた（スクロール・画面の移動）ときは無視する。
+                    // それ以外（このテストの確認の失敗など）はそのまま失敗
+                    if (isStale(e)) continue
                     throw e
                 } catch (e: Throwable) {
                     // 画面が変わって押せなくなった要素などは無視し、それ以外（アプリの例外）は失敗にする
                     val m = e.message.orEmpty()
-                    if (e is IllegalStateException && ("No node" in m || "Failed to perform" in m || "doesn't have" in m || "not attached" in m)) continue
+                    if (isStale(e) || e is IllegalStateException && ("No node" in m || "Failed to perform" in m || "doesn't have" in m || "not attached" in m)) continue
                     failWith("操作で例外: $e\n${e.stackTraceToString().take(2000)}")
                 }
                 checkNoErrors()
@@ -388,5 +391,11 @@ class MonkeyTest {
             println("seed=$s プレイの段階: $seenPhases")
             assertEquals("ゲームの数がおかしい", app.config.value.games.size, app.config.value.games.distinctBy { it.id }.size)
         }
+    }
+
+    /** 操作しようとした要素が、その間に画面から消えた（テストの都合で、アプリの不具合ではない） */
+    private fun isStale(e: Throwable): Boolean {
+        val m = e.message.orEmpty()
+        return "seed=" !in m && ("no longer in the tree" in m || "Failed to perform" in m || "No node" in m || "outside of the" in m)
     }
 }
