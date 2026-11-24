@@ -154,6 +154,7 @@ class MonkeyTest {
                 SyncService(c, File(root, "data"), r, apiFactory = { if (online) remote() else OfflineRemote }, mutexes = TargetMutexes())
             },
             runAndWait = { cmd, started -> emulator(cmd, started) },
+            metadata = offlineMetadata(File(root, "metadata")),
         )
         Pickers.impl = FakePicker(root, roms)
         app.scope.launch { app.play.phase.collect { p -> p?.let { seenPhases += it::class.simpleName!! } } }

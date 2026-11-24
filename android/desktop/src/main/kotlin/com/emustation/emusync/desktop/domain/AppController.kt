@@ -8,6 +8,7 @@ import com.emustation.emusync.desktop.data.ConfigStore
 import com.emustation.emusync.desktop.data.Game
 import com.emustation.emusync.desktop.data.RecordStore
 import com.emustation.emusync.desktop.data.SystemConfig
+import com.emustation.emusync.desktop.meta.GameMetadata
 import com.emustation.emusync.desktop.platform.AppPaths
 import com.emustation.emusync.desktop.platform.Autostart
 import com.emustation.emusync.desktop.platform.Launcher
@@ -24,6 +25,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
@@ -49,6 +52,8 @@ class AppController(
     syncFactory: ((() -> AppConfig), RecordStore) -> SyncService = { c, r -> SyncService(c, root, r) },
     /** エミュを起動して終了を待つ（テストでは差し替える） */
     runAndWait: suspend (List<String>, () -> Unit) -> Long = Launcher::runAndWait,
+    /** ゲームの情報とカバーをインターネットから調べる（テストでは差し替える） */
+    private val metadata: GameMetadata = GameMetadata(File(root, "metadata")),
 ) {
     private val _config = MutableStateFlow(store.load())
     val config: StateFlow<AppConfig> = _config.asStateFlow()
@@ -85,6 +90,79 @@ class AppController(
     }
 
     fun saveGame(g: Game) = update { it.withGame(g) }
+
+    /** ゲームをライブラリに加えて、情報とカバーを調べる */
+    fun addGames(games: List<Game>) {
+        if (games.isEmpty()) return
+        update { c -> games.fold(c) { acc, g -> acc.withGame(g) } }
+        fetchInfo(games.map { it.id })
+    }
+
+    // ---------------------------------------------------------------- ゲームの情報とカバー
+    private val _infoBusy = MutableStateFlow<Set<String>>(emptySet())
+
+    /** 情報とカバーを調べている最中のゲーム */
+    val infoBusy: StateFlow<Set<String>> = _infoBusy.asStateFlow()
+    private val infoMutex = Mutex()
+    private val coversDir get() = File(root, "covers")
+
+    /**
+     * ゲームの情報（日本語のタイトル・型番・地域）とカバーを調べる。
+     * [ids] が null ならライブラリ全体。[again] でなければ、まだ調べていないゲームだけ。
+     * [again] のときは、自分で書き換えたタイトル・カバーも、調べた結果で置き換える
+     */
+    fun fetchInfo(ids: Collection<String>? = null, again: Boolean = false) = scope.launch {
+        val targets = _config.value.games.filter { (ids == null || it.id in ids) && (again || it.infoCheckedAt == null) }.map { it.id }
+        if (targets.isEmpty()) return@launch
+        _infoBusy.update { it + targets }
+        var found = 0
+        try {
+            infoMutex.withLock {
+                for (id in targets) {
+                    try {
+                        val g = _config.value.games.firstOrNull { it.id == id } ?: continue
+                        val s = _config.value.system(g.target)
+                        val m = metadata.lookup(g.target, g.rom, s?.savePath, s?.emulatorExe)
+                        val coverFile = if (m.cover != null && (again || !g.coverEdited)) saveCover(g, m.cover) else null
+                        update { c ->
+                            val cur = c.games.firstOrNull { it.id == id } ?: return@update c
+                            c.withGame(
+                                cur.copy(
+                                    title = if (m.title != null && (again || !cur.titleEdited)) m.title else cur.title,
+                                    titleEdited = if (again && m.title != null) false else cur.titleEdited,
+                                    serial = m.serial ?: cur.serial,
+                                    region = m.region ?: cur.region,
+                                    coverPath = coverFile?.path ?: cur.coverPath,
+                                    coverEdited = if (coverFile != null) false else cur.coverEdited,
+                                    infoCheckedAt = System.currentTimeMillis(),
+                                ),
+                            )
+                        }
+                        if (m.title != null || m.cover != null) found++
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // 1 本調べられなくても、ほかは続ける
+                    } finally {
+                        _infoBusy.update { it - id }
+                    }
+                }
+            }
+        } finally {
+            _infoBusy.update { it - targets.toSet() }
+        }
+        if (found > 0 && (again || targets.size > 1)) notify(Notice("ゲームの情報", "$found 本の情報とカバーを取得しました"))
+    }
+
+    /** カバーを covers/ に置く。名前を毎回変える（画像の読み込みの使い回しで古いものが出ないように）。前のものは消す */
+    private fun saveCover(g: Game, bytes: ByteArray): File {
+        coversDir.mkdirs()
+        val ext = if (bytes[0] == 0x89.toByte()) "png" else "jpg"
+        val f = File(coversDir, "${g.id}-${System.currentTimeMillis()}.$ext")
+        f.writeBytes(bytes)
+        g.coverPath?.let { File(it) }?.takeIf { it.parentFile?.canonicalPath == coversDir.canonicalPath && it != f }?.delete()
+        return f
+    }
 
     fun removeGame(id: String) = update { c -> c.copy(games = c.games.filter { it.id != id }) }
 

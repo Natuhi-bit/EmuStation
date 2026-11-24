@@ -39,6 +39,8 @@ fun main(args: Array<String>) {
     val app = AppController()
     app.refresh()
     app.startPeriodic()
+    // まだ情報とカバーを調べていないゲーム（この機能より前に追加したものなど）を調べる
+    app.fetchInfo()
     val startHidden = "--minimized" in args && app.config.value.startMinimized
     val icon = BitmapPainter(
         Image.makeFromEncoded(Thread.currentThread().contextClassLoader.getResourceAsStream("icon.png")!!.readBytes()).toComposeImageBitmap(),

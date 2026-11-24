@@ -89,6 +89,22 @@ data class XmbCategory(val id: String, val label: String, val icon: ImageVector,
 @Stable
 class XmbState(initialCategory: Int = 1) {
     var category by mutableIntStateOf(initialCategory)
+        private set
+    private var categoryId: String? = null
+
+    /** 列を選ぶ（キー・クリック） */
+    fun selectCategory(i: Int, cats: List<XmbCategory>) {
+        category = i.coerceIn(0, (cats.size - 1).coerceAtLeast(0))
+        categoryId = cats.getOrNull(category)?.id
+    }
+
+    /** 列が増えたり減ったりしても（ハードの列など）、選んでいた列を選んだままにする */
+    fun follow(cats: List<XmbCategory>) {
+        val keep = categoryId?.let { id -> cats.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }
+        val i = (keep ?: category).coerceIn(0, (cats.size - 1).coerceAtLeast(0))
+        if (i != category) category = i
+        categoryId = cats.getOrNull(i)?.id
+    }
     private val itemIndex = mutableStateMapOf<String, Int>()
     var optionsOpen by mutableStateOf(false)
     var optionIndex by mutableIntStateOf(0)
@@ -121,8 +137,8 @@ class XmbState(initialCategory: Int = 1) {
             return true
         }
         when (e.key) {
-            Key.DirectionLeft -> category = (category - 1).coerceAtLeast(0)
-            Key.DirectionRight -> category = (category + 1).coerceAtMost(cats.size - 1)
+            Key.DirectionLeft -> selectCategory(category - 1, cats)
+            Key.DirectionRight -> selectCategory(category + 1, cats)
             Key.DirectionUp -> selectItem(c, itemOf(c) - 1)
             Key.DirectionDown -> selectItem(c, itemOf(c) + 1)
             Key.Enter, Key.NumPadEnter, Key.Spacebar -> activate(item)
@@ -169,7 +185,7 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
             val x = anchorX + catSpacing * (i - catPos) - 70.dp
             Column(
                 Modifier.offset(x, rowY - 40.dp).width(140.dp).alpha(if (selected) 1f else 0.55f)
-                    .clickable(remember { MutableInteractionSource() }, null) { state.category = i }
+                    .clickable(remember { MutableInteractionSource() }, null) { state.selectCategory(i, categories) }
                     .testTag("cat-${c.id}"),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -250,11 +266,17 @@ private fun ItemRow(item: XmbItem, selected: Boolean, modifier: Modifier) {
     Row(modifier.alpha(if (selected) 1f else 0.62f), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
             when {
-                item.image != null -> Image(
-                    item.image, null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(iconSize).shadow(if (selected) 12.dp else 0.dp, RoundedCornerShape(6.dp))
-                        .clip(RoundedCornerShape(6.dp)),
-                )
+                item.image != null -> {
+                    // カバーは切り取らずに全体を見せる（縦長のパッケージ・横長のアイコンとも、枠の中に収める）
+                    val ratio = (item.image.width.toFloat() / item.image.height.coerceAtLeast(1)).coerceIn(0.5f, 2f)
+                    val w = if (ratio >= 1f) iconSize else iconSize * ratio
+                    val h = if (ratio >= 1f) iconSize / ratio else iconSize
+                    Image(
+                        item.image, null, contentScale = ContentScale.FillBounds,
+                        modifier = Modifier.size(w, h).shadow(if (selected) 12.dp else 0.dp, RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(4.dp)),
+                    )
+                }
                 item.icon != null -> Icon(item.icon, null, tint = XmbText.primary, modifier = Modifier.size(iconSize * 0.72f))
             }
         }

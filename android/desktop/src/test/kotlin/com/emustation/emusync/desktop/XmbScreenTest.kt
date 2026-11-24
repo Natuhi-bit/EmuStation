@@ -77,6 +77,7 @@ class XmbScreenTest {
                 }, mutexes = TargetMutexes())
             },
             runAndWait = { _, started -> started(); release.await(); 3600L },
+            metadata = offlineMetadata(File(tmp.root, "metadata")),
         )
         server.seed("ps2/Mcd001.ps2", "x".toByteArray(), 1)
         runBlocking { app.refresh(); kotlinx.coroutines.delay(500) }
@@ -101,8 +102,17 @@ class XmbScreenTest {
         compose.onNodeWithText("ゲームを追加").assertExists()
         compose.onRoot().save("desktop-games")
 
-        // 下で次のゲーム、右で「セーブデータ」、Tab でオプション
+        // ハードごとの列：PS2 の列には PSP のゲームは出ない
+        compose.onNodeWithText("モンスターハンターポータブル 3rd").assertDoesNotExist()
+        compose.onNodeWithText("PS2").assertExists() // 選んでいる列の名前
+
+        // 下で次のゲーム、右で PSP の列、もう一度右で「セーブデータ」、Tab でオプション
         compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForIdle()
+        compose.onNodeWithText("モンスターハンターポータブル 3rd").assertExists()
+        compose.onNodeWithText("ペルソナ3 フェス").assertDoesNotExist()
+        compose.onRoot().save("desktop-games-psp")
         compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
         compose.waitForIdle()
         compose.onNodeWithText("PS2").assertExists()

@@ -33,6 +33,16 @@ data class Game(
     val lastPlayedAt: Long? = null,
     val playSeconds: Long = 0,
     val addedAt: Long = System.currentTimeMillis(),
+    /** 型番（例 SLPM-66168）。ROM やファイル名から自動で調べる */
+    val serial: String? = null,
+    /** 地域（日本・北米・欧州 など） */
+    val region: String? = null,
+    /** タイトルを自分で書き換えた（自動で調べたタイトルで上書きしない） */
+    val titleEdited: Boolean = false,
+    /** カバーを自分で選んだ（自動で取ったカバーで上書きしない） */
+    val coverEdited: Boolean = false,
+    /** 情報とカバーを最後に調べた日時。null ならまだ */
+    val infoCheckedAt: Long? = null,
 )
 
 @Serializable

@@ -63,6 +63,7 @@ class PlayControllerTest {
                 onRun(saves)
                 90L
             },
+            metadata = offlineMetadata(File(tmp.root, "metadata")),
         )
     }
 

@@ -82,7 +82,7 @@ sealed interface Panel {
     data object Theme : Panel
     data object About : Panel
     data class EditGame(val gameId: String?, val target: String? = null) : Panel
-    data object Scan : Panel
+    data class Scan(val target: String? = null) : Panel
     data class Preview(val target: String) : Panel
     data class Conflicts(val target: String) : Panel
     data class History(val target: String) : Panel
@@ -350,24 +350,49 @@ fun EditGamePanel(app: AppController, gameId: String?, presetTarget: String?, on
             Button(
                 enabled = title.isNotBlank() && rom.isNotBlank(),
                 onClick = {
-                    val g = (existing ?: Game(title = title, target = target, rom = rom))
-                        .copy(title = title.trim(), target = target, rom = rom.trim(), coverPath = cover.trim().ifEmpty { null })
-                    app.saveGame(g)
+                    val newCover = cover.trim().ifEmpty { null }
+                    if (existing == null) {
+                        // ファイル名から作ったタイトルのままなら、あとで調べたタイトルに置き換える
+                        val auto = LibraryScanner.cleanTitle(File(rom.trim()).nameWithoutExtension)
+                        app.addGames(listOf(Game(
+                            title = title.trim(), target = target, rom = rom.trim(), coverPath = newCover,
+                            titleEdited = title.trim() != auto, coverEdited = newCover != null,
+                        )))
+                    } else {
+                        val g = existing.copy(
+                            title = title.trim(), target = target, rom = rom.trim(), coverPath = newCover,
+                            titleEdited = existing.titleEdited || title.trim() != existing.title,
+                            coverEdited = existing.coverEdited || newCover != existing.coverPath,
+                        )
+                        if (g.rom != existing.rom || g.target != existing.target) {
+                            // ROM や機種を変えたら、調べ直す
+                            app.saveGame(g.copy(serial = null, region = null, infoCheckedAt = null))
+                            app.fetchInfo(listOf(g.id))
+                        } else {
+                            app.saveGame(g)
+                        }
+                    }
                     onClose()
                 },
                 modifier = Modifier.testTag("game-save"),
             ) { Text(if (existing == null) "ライブラリに追加" else "保存") }
             if (existing != null) TextButton(onClick = { app.removeGame(existing.id); onClose() }) { Text("ライブラリから外す", color = XmbText.error) }
         }
-        if (existing != null) Note("プレイ時間 ${formatPlayTime(existing.playSeconds)}・最後のプレイ ${formatTime(existing.lastPlayedAt)}")
+        if (existing != null) {
+            Note("プレイ時間 ${formatPlayTime(existing.playSeconds)}・最後のプレイ ${formatTime(existing.lastPlayedAt)}")
+            Note(listOfNotNull(existing.serial?.let { "型番 $it" }, existing.region?.let { "地域 $it" }).joinToString("・").ifEmpty { "型番：まだ分かりません" })
+            OutlinedButton(onClick = { app.fetchInfo(listOf(existing.id), again = true); onClose() }) { Text("情報とカバーを取得し直す") }
+        } else {
+            Note("追加すると、日本語のタイトル・型番・カバーをインターネットから自動で取得します（自分で入れたタイトル・カバーはそのまま）")
+        }
     }
 }
 
 // ---------------------------------------------------------------- フォルダからゲームを探す
 @Composable
-fun ScanPanel(app: AppController, onClose: () -> Unit) {
+fun ScanPanel(app: AppController, presetTarget: String?, onClose: () -> Unit) {
     val c by app.config.collectAsState()
-    var target by remember { mutableStateOf("ps2") }
+    var target by remember { mutableStateOf(presetTarget ?: "ps2") }
     var folder by remember { mutableStateOf("") }
     val found = remember { mutableStateListOf<LibraryScanner.Found>() }
     val checked = remember { mutableStateListOf<String>() }
@@ -406,11 +431,10 @@ fun ScanPanel(app: AppController, onClose: () -> Unit) {
                 }
             }
             Button(enabled = checked.isNotEmpty(), onClick = {
-                app.update { cfg ->
-                    found.filter { it.rom in checked }.fold(cfg) { acc, f -> acc.withGame(Game(title = f.title, target = target, rom = f.rom)) }
-                }
+                app.addGames(found.filter { it.rom in checked }.map { Game(title = it.title, target = target, rom = it.rom) })
                 onClose()
             }) { Text("${checked.size} 本をライブラリに追加") }
+            Note("追加したあと、日本語のタイトル・型番・カバーをインターネットから自動で取得します")
         } else if (!scanning && folder.isNotBlank()) {
             Note("「探す」を押すと、フォルダの中のゲームを一覧にします")
         }
