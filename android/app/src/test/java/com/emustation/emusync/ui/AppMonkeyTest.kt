@@ -317,9 +317,16 @@ class AppMonkeyTest {
         while (shadowOf(app).nextStartedActivity != null) Unit // ここまでに開いたものは数えない
         // 1 回目の処理が進む前に、2 回目が届く
         compose.onNode(hasText("同期せずに起動")).performTouchInput { click(); advanceEventTime(80); click() }
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText("この端末でプレイ中")).fetchSemanticsNodes().isNotEmpty() }
-        compose.waitForIdle()
-        val launched = generateSequence { shadowOf(app).nextStartedActivity }.count { it.`package` == emuPackages[0] || it.component?.packageName == emuPackages[0] }
+        // 「プレイ中」と出たあとにエミュを起動するので、起動が記録されるまで待つ。そのあとも少し待って、2 回目がないことを確かめる
+        var launched = 0
+        fun collect() {
+            launched += generateSequence { shadowOf(app).nextStartedActivity }
+                .count { it.`package` == emuPackages[0] || it.component?.packageName == emuPackages[0] }
+        }
+        // （PC 上ではメインスレッドの処理は待っている間にしか進まないので、毎回 waitForIdle する）
+        val deadline = System.currentTimeMillis() + 15_000
+        while (launched == 0 && System.currentTimeMillis() < deadline) { compose.waitForIdle(); collect(); Thread.sleep(50) }
+        repeat(10) { compose.waitForIdle(); Thread.sleep(100); collect() }
         assertEquals("エミュは 1 回だけ起動する", 1, launched)
         checkNoErrors()
     }
