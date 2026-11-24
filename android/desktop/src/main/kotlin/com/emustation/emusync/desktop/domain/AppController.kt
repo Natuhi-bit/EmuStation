@@ -85,6 +85,11 @@ class AppController(
     private fun bump() = _revision.update { it + 1 }
 
     // ---------------------------------------------------------------- 設定
+    /**
+     * 設定を書き換えて保存する。画面の操作と裏の処理（情報の取得・プレイ時間の記録）から同時に呼ばれても、
+     * どちらの変更も失われないように 1 つずつ行う（読んで・変えて・書くまでを、このオブジェクトのロックで）
+     */
+    @Synchronized
     fun update(f: (AppConfig) -> AppConfig) {
         val c = f(_config.value)
         _config.value = c

@@ -287,8 +287,9 @@ class MonkeyTest {
     // ---------------------------------------------------------------- 確かめる
     private fun checkNoErrors() {
         if (errors.isNotEmpty()) failWith(errors.first())
-        val saved = store.load()
-        if (saved != app.config.value) failWith("保存した設定と、画面が使っている設定が違う")
+        // 裏の処理が書き換えている途中と比べないよう、書き換えと同じロックの中で比べる
+        val same = synchronized(app) { store.load() == app.config.value }
+        if (!same) failWith("保存した設定と、画面が使っている設定が違う")
         val ids = app.config.value.games.map { it.id }
         if (ids.size != ids.toSet().size) failWith("同じ ID のゲームが 2 つある: $ids")
         if (app.config.value.games.any { it.playSeconds < 0 }) failWith("プレイ時間がマイナス")

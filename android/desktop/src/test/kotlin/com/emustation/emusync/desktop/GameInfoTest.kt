@@ -122,4 +122,17 @@ class GameInfoTest {
         // 何もなければ「ゲーム」の列（追加の入口）だけ
         assertEquals(listOf("settings", "game", "saves", "network"), buildCategories(AppConfig(), ServerStatus.NotConfigured, emptyMap(), null) {}.map { it.id })
     }
+
+    @Test
+    fun concurrentUpdates_areNotLost() {
+        // 画面の操作（ゲームの追加）と、裏の処理（情報の取得・プレイ時間の記録）が同時に設定を書き換えても、どちらも残る
+        val app = app()
+        val threads = (0 until 8).map { t ->
+            Thread { repeat(100) { i -> app.saveGame(Game(id = "g$t-$i", title = "x", target = "psp", rom = "r")) } }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+        assertEquals(800, app.config.value.games.size)
+        assertEquals(800, ConfigStore(File(tmp.root, "config.json")).load().games.size)
+    }
 }
