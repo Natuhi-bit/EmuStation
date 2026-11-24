@@ -10,16 +10,20 @@ import com.emustation.emusync.data.db.AppDatabase
 import com.emustation.emusync.data.prefs.AppSettings
 import com.emustation.emusync.data.prefs.KeystoreTokenCipher
 import com.emustation.emusync.data.prefs.SettingsStore
+import com.emustation.emusync.data.prefs.TokenCipher
 import com.emustation.emusync.domain.periodic.PeriodicPushRunner
 import com.emustation.emusync.domain.play.PlaySessionManager
 import com.emustation.emusync.ui.settings.Permissions
 import java.io.File
 
-/** 手動の DI コンテナ（設計書 §9） */
-class AppContainer(context: Context) {
+/**
+ * 手動の DI コンテナ（設計書 §9）。
+ * [tokenCipher] はテスト（Android Keystore のない PC 上で、アプリ全体を動かすモンキーテスト）で差し替える
+ */
+class AppContainer(context: Context, tokenCipher: TokenCipher = KeystoreTokenCipher()) {
     private val appContext = context.applicationContext
 
-    val settingsStore = SettingsStore(appContext, KeystoreTokenCipher())
+    val settingsStore = SettingsStore(appContext, tokenCipher)
     val caStore = CaStore(File(appContext.filesDir, "ca"))
     val db: AppDatabase by lazy { AppDatabase.create(appContext) }
     val launcherApps = LauncherApps(appContext)

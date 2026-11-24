@@ -193,11 +193,21 @@ class HomeViewModel(
 
     private fun machineOf(target: String) = Presets.byName(target)?.machine ?: target
 
+    /**
+     * これから始める印（進行中のダイアログ）を、確かめるのと同時に付ける（どちらもメインスレッドなので途中で割り込まれない）。
+     * 連打・ダブルタップで同時に何回も始まらないようにする
+     */
+    private fun claim(target: String): Boolean {
+        if (play.value is PlayDialog.Progress) return false
+        play.value = PlayDialog.Progress(target, machineOf(target), PlayStep.LOCKING)
+        return true
+    }
+
     fun play(target: String, force: Boolean = false) {
-        if (play.value is PlayDialog.Progress) return
+        if (!claim(target)) return
         viewModelScope.launch {
             val machine = machineOf(target)
-            val t = db.targets().get(target) ?: return@launch
+            val t = db.targets().get(target) ?: run { play.value = null; return@launch }
             // エミュが起動できるかを先に確かめる（ロックを取ってから起動できないと困るので）
             val problem = when {
                 t.emuPackage == null -> UiText(R.string.err_emu_not_set)
@@ -213,15 +223,15 @@ class HomeViewModel(
             val r = playManager.start(target, force) { step ->
                 play.value = PlayDialog.Progress(target, machine, step)
             }
-            play.value = when (r) {
+            when (r) {
                 is StartResult.Ready -> {
+                    play.value = null // 起動できなかったときのエラーは launchEmulator が出す（後から消さない）
                     launchEmulator(t, r.session)
-                    null
                 }
-                is StartResult.LockedByOther -> PlayDialog.LockedByOther(target, machine, r.device, r.expiresAt)
-                is StartResult.Unreachable -> PlayDialog.Unreachable(target, machine, r.message)
-                is StartResult.Conflicts -> PlayDialog.Conflicts(target, machine, r.result)
-                is StartResult.Failed -> PlayDialog.Error(target, machine, r.message)
+                is StartResult.LockedByOther -> play.value = PlayDialog.LockedByOther(target, machine, r.device, r.expiresAt)
+                is StartResult.Unreachable -> play.value = PlayDialog.Unreachable(target, machine, r.message)
+                is StartResult.Conflicts -> play.value = PlayDialog.Conflicts(target, machine, r.result)
+                is StartResult.Failed -> play.value = PlayDialog.Error(target, machine, r.message)
             }
             db.targets().get(target)?.let { refreshLocal(it) }
         }
@@ -232,19 +242,23 @@ class HomeViewModel(
 
     /** つながらないときの [同期せずに起動] */
     fun playOffline(target: String) {
+        if (!claim(target)) return
         viewModelScope.launch {
-            val t = db.targets().get(target) ?: return@launch
-            launchEmulator(t, playManager.startOffline(target).session)
-            play.value = null
+            val t = db.targets().get(target) ?: run { play.value = null; return@launch }
+            val session = playManager.startOffline(target).session
+            play.value = null // 起動できなかったときのエラーは launchEmulator が出す（ここで消さない）
+            launchEmulator(t, session)
         }
     }
 
     /** 競合のダイアログの [無視して起動] */
     fun playIgnoringConflicts(target: String) {
+        if (!claim(target)) return
         viewModelScope.launch {
-            val t = db.targets().get(target) ?: return@launch
-            launchEmulator(t, playManager.startIgnoringConflicts(target).session)
-            play.value = null
+            val t = db.targets().get(target) ?: run { play.value = null; return@launch }
+            val session = playManager.startIgnoringConflicts(target).session
+            play.value = null // 起動できなかったときのエラーは launchEmulator が出す（ここで消さない）
+            launchEmulator(t, session)
         }
     }
 

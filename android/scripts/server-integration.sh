@@ -6,7 +6,9 @@
 #      - Python 版クライアントとの相互運用（PythonInteropTest）
 #      - プレイの流れ：ロック・423・奪って起動・オフライン・送信（RealServerPlayTest）
 #      - 競合のファイルごとの解決、履歴と復元（RealServerResolveTest）
-#   2. サーバー停止後：「つながらない」（Offline）
+#      - アプリ全体のモンキーテスト：でたらめに操作しつつ、ほかの端末の送信・ロックも起こし、
+#        最後にロック・送り残しがなく、手元とサーバーが一致すること（AppMonkeyTest）
+#   2. サーバー停止後：「つながらない」（Offline）、モンキーテスト（つながらないまま画面だけ）
 # 使い方: android/scripts/server-integration.sh   （python3 と JDK が必要）
 set -euo pipefail
 
@@ -35,7 +37,7 @@ export EMUSYNC_IT_TOKEN_B="$TOKEN_B" EMUSYNC_IT_PYTHON="$WORK/venv/bin/python" E
 
 # 共通モジュール（:core）と Android アプリ（:app）のテスト
 CORE_CLASSES=(ServerIntegrationTest RealServerScenarioTest PythonInteropTest)
-APP_CLASSES=(RealServerPlayTest RealServerResolveTest)
+APP_CLASSES=(RealServerPlayTest RealServerResolveTest AppMonkeyTest)
 run_tests() {
   local args=(:core:test)
   for c in "${CORE_CLASSES[@]}"; do args+=(--tests "*.$c"); done
@@ -68,11 +70,11 @@ PY
 
 echo "== サーバー起動中"
 EMUSYNC_IT_DOWN=0 run_tests
-check ServerIntegrationTest=4 RealServerScenarioTest=7 PythonInteropTest=4 RealServerPlayTest=11 RealServerResolveTest=7
+check ServerIntegrationTest=4 RealServerScenarioTest=7 PythonInteropTest=4 RealServerPlayTest=11 RealServerResolveTest=7 AppMonkeyTest=2
 
 echo "== サーバー停止後"
 kill "$SERVER_PID"; wait "$SERVER_PID" 2>/dev/null || true; SERVER_PID=
 EMUSYNC_IT_DOWN=1 run_tests
-check ServerIntegrationTest=1 RealServerScenarioTest=0 PythonInteropTest=0 RealServerPlayTest=0 RealServerResolveTest=0
+check ServerIntegrationTest=1 RealServerScenarioTest=0 PythonInteropTest=0 RealServerPlayTest=0 RealServerResolveTest=0 AppMonkeyTest=2
 
 echo "OK"

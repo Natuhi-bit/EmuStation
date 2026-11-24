@@ -23,10 +23,13 @@ import sys
 import time
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 
 DATA_DIR = Path(os.environ.get("EMUSYNC_DATA", "./data")).resolve()
 BLOB_DIR = DATA_DIR / "blobs"
@@ -34,8 +37,13 @@ DB_PATH = DATA_DIR / "emusync.db"
 MAX_BYTES = int(os.environ.get("EMUSYNC_MAX_BYTES", str(256 * 1024 * 1024)))
 KEEP_VERSIONS = int(os.environ.get("EMUSYNC_KEEP_VERSIONS", "30"))  # パスごとの履歴保持数
 
-# パス: "ppsspp/SAVEDATA/ULJM05800/DATA.BIN" のような相対パスのみ許可
-PATH_RE = re.compile(r"^[^/\\\x00][^\\\x00]*$")
+# パス: "ppsspp/SAVEDATA/ULJM05800/DATA.BIN" のような相対パスのみ許可。
+# 制御文字（改行など）は使えない。改行を含むパスは保存できても、URL の経路に合わず読み出せなくなる
+PATH_RE = re.compile(r"[^/\\\x00-\x1f\x7f][^\\\x00-\x1f\x7f]*")
+
+# 版番号は SQLite の整数に入る範囲だけ受け付ける（範囲外は 422。以前は 500 になっていた）
+SqlInt = Annotated[int, Field(ge=-(2 ** 63), le=2 ** 63 - 1)]
+LOCK_TTL_MAX = 366 * 24 * 3600
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices (
@@ -92,7 +100,7 @@ def blob_path(sha: str) -> Path:
 
 def check_path(path: str) -> str:
     parts = path.split("/")
-    if not PATH_RE.match(path) or any(p in ("", ".", "..") for p in parts):
+    if not PATH_RE.fullmatch(path) or any(p in ("", ".", "..") for p in parts):
         raise HTTPException(400, f"不正なパス: {path}")
     return path
 
@@ -127,6 +135,21 @@ async def lifespan(_app):
 app = FastAPI(title="emusync", lifespan=lifespan)
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, exc: RequestValidationError):
+    """
+    入力の誤り（422）。FastAPI の既定の処理は、JSON でない本文（バイナリ）が来ると
+    エラーの中の本文を文字列にできず 500 になるので、文字列に直してから返す
+    """
+    errors = []
+    for e in exc.errors():
+        e = dict(e)
+        if isinstance(e.get("input"), (bytes, bytearray)):
+            e["input"] = bytes(e["input"][:200]).decode("utf-8", "replace")
+        errors.append(e)
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
+
 @app.get("/api/ping")
 def ping(device: str = Depends(current_device)):
     return {"ok": True, "device": device, "time": time.time()}
@@ -145,7 +168,11 @@ def manifest(prefix: str = "", device: str = Depends(current_device)):
 
 
 @app.get("/api/files/{path:path}")
-def get_file(path: str, version: int | None = None, device: str = Depends(current_device)):
+def get_file(
+    path: str,
+    version: Annotated[int | None, Query(ge=-(2 ** 63), le=2 ** 63 - 1)] = None,
+    device: str = Depends(current_device),
+):
     check_path(path)
     with db() as conn:
         if version is None:
@@ -262,7 +289,7 @@ def history(path: str, device: str = Depends(current_device)):
 
 
 class RestoreReq(BaseModel):
-    version: int
+    version: SqlInt
 
 
 @app.post("/api/restore/{path:path}")
@@ -300,7 +327,7 @@ def restore_version(path: str, version: int, device: str) -> dict:
 
 # ------------------------------------------------ プレイ中ロック
 class LockReq(BaseModel):
-    ttl: int = 6 * 3600  # 秒。プレイ時間より長めに
+    ttl: int = Field(6 * 3600, ge=1, le=LOCK_TTL_MAX)  # 秒。プレイ時間より長めに
     force: bool = False
 
 

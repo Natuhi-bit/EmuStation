@@ -55,10 +55,22 @@ class PlayController(
         return Launcher.buildCommand(s.emulatorExe, s.args, game.rom)
     }
 
+    /**
+     * 始めてよいか確かめ、同時に始まらないように「準備中」にする（確かめるのと印を付けるのを 1 回で）。
+     * Enter の長押し（キーリピート）やダブルクリックで何回も押されても、エミュは 1 回だけ起動する
+     */
+    private fun claim(game: Game, text: String): Boolean {
+        while (true) {
+            val cur = _phase.value
+            if (cur is PlayPhase.Working || cur is PlayPhase.Playing) return false
+            if (_phase.compareAndSet(cur, PlayPhase.Working(game, text))) return true
+        }
+    }
+
     /** プレイ。[force] は他の端末のロックを奪う */
     suspend fun play(game: Game, force: Boolean = false) {
-        if (busy) return
-        val cmd = command(game) ?: return fail(game, "${Presets.machineOf(game.target)} のエミュが設定されていません。設定 → エミュレーターで選んでください")
+        if (!claim(game, "準備しています…")) return
+        val cmd = command(game) ?: return fail(game, noEmulator(game))
         if (!java.io.File(cmd.first()).isFile) return fail(game, "エミュが見つかりません: ${cmd.first()}")
 
         // 1. 前回のプレイの送信が済んでいなければ、先に送る
@@ -101,15 +113,20 @@ class PlayController(
 
     /** つながらないまま起動する */
     suspend fun playOffline(game: Game) {
-        val cmd = command(game) ?: return
+        if (!claim(game, "起動しています…")) return
+        val cmd = command(game) ?: return fail(game, noEmulator(game))
         launch(game, cmd, online = false)
     }
 
     /** 競合を無視して起動する（ロックは取得済み） */
     suspend fun playIgnoringConflicts(game: Game) {
-        val cmd = command(game) ?: return
+        if (!claim(game, "起動しています…")) return
+        val cmd = command(game) ?: return fail(game, noEmulator(game))
         launch(game, cmd, online = true)
     }
+
+    private fun noEmulator(game: Game) =
+        "${Presets.machineOf(game.target)} のエミュが設定されていません。設定 → エミュレーターで選んでください"
 
     /** 競合のダイアログで [やめる]。ロックを解除する */
     suspend fun abort(game: Game) {

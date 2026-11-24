@@ -70,6 +70,18 @@ pip install pytest httpx -r server/requirements.txt
 python -m pytest server/tests
 ```
 
+#### モンキーテスト
+でたらめな操作・要求を大量に送り、落ちない・固まらない・データが壊れない（版が飛ばない、ロックや送り残しが残らない、
+手元とサーバーが一致する）ことを確かめる。GitHub Actions の「Monkey tests」が push ごとに、実行番号を乱数の種にして回す
+（手動で回すときは回数と種を指定できる）。失敗したら、ログに出る `seed=` の値で再現できる。
+
+| 対象 | 手元で回すとき |
+|---|---|
+| サーバーの API（同時書き込みを含む） | `MONKEY_SEED=7 MONKEY_STEPS=5000 python -m pytest server/tests/test_monkey.py` |
+| 管理画面（ブラウザ。Playwright が必要） | `server/tests/admin-ui-monkey.sh 1000 7` |
+| Windows 版の画面 | `MONKEY_SEED=7 ./gradlew :desktop:test --tests '*MonkeyTest'`（android/ で） |
+| Android アプリ全体（本物のサーバーを立てる） | `MONKEY_SEED=7 MONKEY_STEPS=2000 android/scripts/server-integration.sh` |
+
 ### 調整用の環境変数（emusync.service の Environment=）
 | 変数 | 既定値 | 内容 |
 |---|---|---|

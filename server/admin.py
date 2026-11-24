@@ -19,11 +19,11 @@ import shutil
 import time
 import zipfile
 from pathlib import Path
-from typing import Callable
+from typing import Annotated, Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 STATIC_DIR = Path(__file__).resolve().parent / "static" / "admin"
 COOKIE = "emusync_admin"
@@ -257,7 +257,7 @@ class DeviceReq(BaseModel):
 
 
 class RestoreReq(BaseModel):
-    version: int
+    version: Annotated[int, Field(ge=-(2 ** 63), le=2 ** 63 - 1)]
 
 
 def build_router(core: Core) -> APIRouter:
@@ -360,7 +360,7 @@ def build_router(core: Core) -> APIRouter:
         return {"path": path, "versions": [dict(r) for r in rows]}
 
     @router.get("/api/download/{path:path}", dependencies=[admin])
-    def download(path: str, version: int | None = None):
+    def download(path: str, version: Annotated[int | None, Query(ge=-(2 ** 63), le=2 ** 63 - 1)] = None):
         core.check_path(path)
         with core.db() as conn:
             if version is None:

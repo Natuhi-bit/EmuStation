@@ -34,7 +34,7 @@ class PlayControllerTest {
     private val server = FakeServer()
     private var offline = false
     private var onRun: (File) -> Unit = {}
-    private val launched = mutableListOf<List<String>>()
+    private val launched = java.util.Collections.synchronizedList(mutableListOf<List<String>>())
     private lateinit var saves: File
     private lateinit var app: AppController
     private lateinit var game: Game
@@ -149,5 +149,20 @@ class PlayControllerTest {
         app.periodicOnce()
         assertEquals("local", String(server.get("ps2/Mcd001.ps2")!!.data))
         assertEquals(false, File(saves, "Mcd002.ps2").exists())
+    }
+
+    @Test
+    fun rapidRepeatedPlay_launchesEmulatorOnce() {
+        // Enter の長押し（キーリピート）やダブルクリックで、同時に何回もプレイを押された
+        val launches = java.util.concurrent.atomic.AtomicInteger()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        onRun = { launches.incrementAndGet(); runBlocking { gate.await() } }
+        val g = app.config.value.games.single()
+        val jobs = (1..8).map { app.playGame(g) } + (1..4).map { app.playOffline(g) }
+        Thread.sleep(1500)
+        gate.complete(Unit)
+        runBlocking { jobs.forEach { it.join() } }
+        assertEquals("エミュは 1 回だけ起動する", 1, launches.get())
+        assertEquals(1, launched.size)
     }
 }

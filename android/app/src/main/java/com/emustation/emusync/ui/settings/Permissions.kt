@@ -13,7 +13,11 @@ import androidx.core.net.toUri
 
 /** 権限の確認と、許可画面を開く処理（設計書 §8.1, §8.4） */
 object Permissions {
-    fun hasAllFilesAccess(): Boolean = Environment.isExternalStorageManager()
+    /** 「すべてのファイルへのアクセス」の判定。PC 上のテスト（Robolectric）では判定できないので差し替える */
+    @Volatile
+    var allFilesAccessCheck: () -> Boolean = { Environment.isExternalStorageManager() }
+
+    fun hasAllFilesAccess(): Boolean = allFilesAccessCheck()
 
     fun hasNotificationPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||

@@ -1,0 +1,77 @@
+# モンキーテスト：でたらめな操作・要求を大量に送って、落ちない・固まらない・データが壊れないことを確かめる。
+# push ごとに実行番号を乱数の種にして毎回違う操作を試す。失敗したら、ログの seed= の値で手元で再現できる:
+#   サーバー     MONKEY_SEED=<種> MONKEY_STEPS=<回数> pytest server/tests/test_monkey.py
+#   管理画面     server/tests/admin-ui-monkey.sh <回数> <種>
+#   Windows 版   MONKEY_SEED=<種> ./gradlew :desktop:test --tests '*MonkeyTest'
+#   Android 版   MONKEY_SEED=<種> android/scripts/server-integration.sh
+# 手動で回すとき（Actions → Monkey tests → Run workflow）は、回数と種を指定できる。
+name: Monkey tests
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - "server/**"
+      - ".github/workflows/monkey.yml"
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: 操作の回数（それぞれのテストで）
+        default: "1500"
+      seed:
+        description: 乱数の種（空なら実行番号）
+        default: ""
+
+env:
+  MONKEY_SEED: ${{ inputs.seed || github.run_number }}
+  MONKEY_STEPS: ${{ inputs.steps || '1000' }}
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 準備
+        run: pip install -r server/requirements.txt pytest httpx
+      - name: API（でたらめな要求・同時書き込み）
+        working-directory: server
+        run: python -m pytest -q tests/
+      - name: 管理画面（ブラウザでのでたらめな操作）
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+          NODE_PATH="$PWD/node_modules" PYTHON=python server/tests/admin-ui-monkey.sh "$MONKEY_STEPS" "$MONKEY_SEED"
+
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Windows 版の画面（XMB）
+        working-directory: android
+        run: ./gradlew --no-daemon :desktop:test --tests '*MonkeyTest'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-monkey-screenshots
+          path: android/desktop/build/screenshots/desktop-monkey-*.png
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Android アプリ全体（本物のサーバーを立てて）
+        run: android/scripts/server-integration.sh
