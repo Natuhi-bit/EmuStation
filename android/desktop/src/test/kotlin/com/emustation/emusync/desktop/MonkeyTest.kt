@@ -320,6 +320,8 @@ class MonkeyTest {
             }
         }
         assertTrue("プレイの記録が残っている: ${app.records.sessions()}", app.records.sessions().isEmpty())
+        // つながらなくて外せなかったロックは、つながったあとの定期の処理で外し直す
+        runBlocking { app.periodicOnce() }
         for (t in listOf("ps2", "psp", "vita")) {
             if (server.lockHolder(t) == device) failWith("プレイしていないのに $t のロックが残っている")
         }

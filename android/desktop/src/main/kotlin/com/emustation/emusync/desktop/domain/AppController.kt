@@ -294,6 +294,7 @@ class AppController(
     }
 
     suspend fun periodicOnce() {
+        runCatching { play.retryReleases() } // 外せなかったロック（送信の設定に関係なく）
         if (!_config.value.periodicPush) return
         val playing = play.phase.value.let { if (it is PlayPhase.Playing || it is PlayPhase.Working) it.game?.target else null }
         // 送り残したプレイ

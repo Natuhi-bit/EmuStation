@@ -166,4 +166,28 @@ class PlayControllerTest {
         assertEquals("エミュは 1 回だけ起動する", 1, launches.get())
         assertEquals(1, launched.size)
     }
+
+    @Test
+    fun emulatorFailsToStart_releasesLock() {
+        onRun = { throw java.io.IOException("起動できません") }
+        play()
+        assertTrue(app.play.phase.value is PlayPhase.Failed)
+        assertNull("遊んでいないのにロックが残っている", server.lockHolder("ps2"))
+        assertTrue(app.records.sessions().isEmpty())
+    }
+
+    @Test
+    fun releaseFailsWhileOffline_isRetriedLater() = runBlocking {
+        server.seed("ps2/Mcd001.ps2", "server".toByteArray(), 1)
+        File(saves, "Mcd001.ps2").writeText("local")
+        app.play.play(game) // 競合：ロックは持ったまま
+        assertTrue(app.play.phase.value is PlayPhase.Conflicts)
+        assertEquals("win", server.lockHolder("ps2"))
+        offline = true
+        app.play.abort(game) // [やめる] のときにつながらない → 外せない
+        assertEquals("win", server.lockHolder("ps2"))
+        offline = false
+        app.periodicOnce() // つながったら外し直す
+        assertNull(server.lockHolder("ps2"))
+    }
 }

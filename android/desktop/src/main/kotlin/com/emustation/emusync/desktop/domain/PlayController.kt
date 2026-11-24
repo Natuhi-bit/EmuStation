@@ -70,6 +70,7 @@ class PlayController(
     /** プレイ。[force] は他の端末のロックを奪う */
     suspend fun play(game: Game, force: Boolean = false) {
         if (!claim(game, "準備しています…")) return
+        retryReleases()
         val cmd = command(game) ?: return fail(game, noEmulator(game))
         if (!java.io.File(cmd.first()).isFile) return fail(game, "エミュが見つかりません: ${cmd.first()}")
 
@@ -100,7 +101,7 @@ class PlayController(
         _phase.value = PlayPhase.Working(game, "クラウドと同期しています…")
         when (val o = sync.run(game.target, SyncMode.SYNC, trigger = "play")) {
             is SyncOutcome.Failed -> {
-                runCatching { api.unlock(game.target) }
+                release(game.target)
                 return fail(game, o.message)
             }
             is SyncOutcome.Done -> if (o.result.conflicts.isNotEmpty()) {
@@ -130,7 +131,7 @@ class PlayController(
 
     /** 競合のダイアログで [やめる]。ロックを解除する */
     suspend fun abort(game: Game) {
-        runCatching { locks()?.unlock(game.target) }
+        release(game.target)
         _phase.value = null
     }
 
@@ -145,6 +146,7 @@ class PlayController(
             throw e
         } catch (e: Exception) {
             sync.records.removeSession(game.target)
+            if (online) release(game.target) // 遊んでいないのにロックが残らないように
             return fail(game, "起動できませんでした: ${e.message}")
         }
         val c = config()
@@ -177,7 +179,7 @@ class PlayController(
         if (!s.online && api != null) runCatching { api.lock(target, PLAY_LOCK_TTL, false) }
         val o = sync.run(target, SyncMode.PUSH, trigger = "finish")
         if (o is SyncOutcome.Done && o.result.errors.isEmpty()) {
-            runCatching { api?.unlock(target) }
+            release(target)
             sync.records.removeSession(target)
         }
         return if (o is SyncOutcome.Done && o.result.errors.isNotEmpty()) {
@@ -185,6 +187,29 @@ class PlayController(
         } else {
             o
         }
+    }
+
+    /** 外せなかったロック（つながらなかったなど）。あとで外し直す */
+    private val pendingRelease = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** ロックを外す。外せなければ覚えておき、[retryReleases] で外し直す（ほかの端末が 12 時間「プレイ中」にならないように） */
+    private suspend fun release(target: String) {
+        val api = locks() ?: return
+        try {
+            api.unlock(target)
+            pendingRelease -= target
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            pendingRelease += target
+        }
+    }
+
+    /** 外せなかったロックを外し直す（今そのゲームで遊んでいない・送り残しのないものだけ） */
+    suspend fun retryReleases() {
+        val playing = _phase.value?.takeIf { busy || it is PlayPhase.Conflicts }?.game?.target
+        val sessions = sync.records.sessions().map { it.target }.toSet()
+        for (t in pendingRelease.toList()) if (t != playing && t !in sessions) release(t)
     }
 
     private fun fail(game: Game, message: String) {
