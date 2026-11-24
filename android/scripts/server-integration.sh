@@ -43,7 +43,8 @@ run_tests() {
   for c in "${CORE_CLASSES[@]}"; do args+=(--tests "*.$c"); done
   args+=(--rerun :app:testDebugUnitTest)
   for c in "${APP_CLASSES[@]}"; do args+=(--tests "*.$c"); done
-  ./gradlew -q --max-workers 2 "${args[@]}" --rerun
+  # 失敗しても止めず、下の check で失敗の理由を出してから止める
+  ./gradlew -q --max-workers 2 "${args[@]}" --rerun || true
 }
 
 # テスト結果の XML から、クラスごとに「実行（スキップ以外）された件数」と失敗の件数を出し、期待値と照合する
@@ -54,11 +55,19 @@ import glob, sys, xml.etree.ElementTree as ET
 ok = True
 for arg in sys.argv[1:]:
     cls, want = arg.split("=")
-    r = ET.parse(glob.glob(f"*/build/test-results/*/TEST-*.{cls}.xml")[0]).getroot()
+    found = glob.glob(f"*/build/test-results/*/TEST-*.{cls}.xml")
+    if not found:
+        print(f"  !! {cls}: 結果がない（ビルドの失敗など）")
+        ok = False
+        continue
+    r = ET.parse(found[0]).getroot()
     for c in r.iter("testcase"):
         state = "skip" if c.find("skipped") is not None else (
             "FAIL" if c.find("failure") is not None or c.find("error") is not None else "pass")
         print(f"  {state:4}  {cls}.{c.get('name')}")
+        if state == "FAIL":
+            f = c.find("failure") if c.find("failure") is not None else c.find("error")
+            print("        " + (f.text or "")[:4000].replace("\n", "\n        "))
     ran = int(r.get("tests")) - int(r.get("skipped"))
     bad = int(r.get("failures")) + int(r.get("errors"))
     if ran != int(want) or bad:
