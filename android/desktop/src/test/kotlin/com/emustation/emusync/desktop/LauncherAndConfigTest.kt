@@ -91,4 +91,21 @@ class LauncherAndConfigTest {
         File(vita, "ux0/app/NOTATITLE").mkdirs()
         assertEquals(listOf("PCSG00001"), LibraryScanner.scan(Presets.byTarget("vita")!!, vita).map { it.rom })
     }
+
+    @Test
+    fun emulatorEnvironment_dropsOwnRuntimeFromPath() {
+        // インストールしたアプリは runtime/bin を PATH の先頭に足す。エミュには渡さない（RPCS3 が msvcp140.dll を読み違える）
+        val own = listOf(java.io.File("/opt/emusync/runtime"), java.io.File("/opt/emusync"))
+        val env = mutableMapOf(
+            "PATH" to "/opt/emusync/runtime/bin:/usr/bin:/opt/emusync:/opt/emusync-other/bin::/opt/emusync/runtime/bin/server",
+            "HOME" to "/home/u",
+        )
+        com.emustation.emusync.desktop.platform.Launcher.cleanEnvironment(env, own)
+        assertEquals("/usr/bin:/opt/emusync-other/bin", env["PATH"])
+        assertEquals("/home/u", env["HOME"])
+        // Windows の "Path" のような書き方でも
+        val env2 = mutableMapOf("Path" to "/opt/emusync/runtime/bin:/bin")
+        com.emustation.emusync.desktop.platform.Launcher.cleanEnvironment(env2, own)
+        assertEquals("/bin", env2["Path"])
+    }
 }

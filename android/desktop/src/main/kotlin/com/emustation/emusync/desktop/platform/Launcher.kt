@@ -48,11 +48,37 @@ object Launcher {
      * 起動中に見つけた子孫のプロセスがすべて終わるまで待つ。
      * @return 起動から終了までの秒数
      */
+    /**
+     * emusync 自身のフォルダ（同梱の Java の実行環境など）。インストールしたアプリは、起動したときに
+     * runtime\bin を PATH の先頭に足すので、そのままエミュに渡すと、エミュが emusync の DLL（msvcp140.dll など）を
+     * 読んでしまう（RPCS3 が「msvcp140.dll was incorrectly installed」で止まる）
+     */
+    fun ownDirs(): List<File> = listOfNotNull(
+        System.getProperty("java.home")?.let(::File),
+        System.getProperty("jpackage.app-path")?.let { File(it).parentFile },
+    )
+
+    /** エミュに渡す環境変数から、emusync 自身のフォルダを PATH から外す（Windows の Path は大文字・小文字を問わない） */
+    fun cleanEnvironment(env: MutableMap<String, String>, own: List<File>) {
+        if (own.isEmpty()) return
+        val roots = own.map { it.absoluteFile.normalize().path.trimEnd('\\', '/').lowercase() }
+        val sep = if (isWindows) ";" else File.pathSeparator
+        for (key in env.keys.filter { it.equals("PATH", ignoreCase = true) }) {
+            val kept = env.getValue(key).split(sep).filter { entry ->
+                val e = runCatching { File(entry.trim()).absoluteFile.normalize().path.trimEnd('\\', '/').lowercase() }.getOrDefault("")
+                entry.isNotBlank() && roots.none { r -> e == r || e.startsWith(r + File.separator) || e.startsWith("$r\\") || e.startsWith("$r/") }
+            }
+            env[key] = kept.joinToString(sep)
+        }
+    }
+
     suspend fun runAndWait(command: List<String>, onStarted: () -> Unit = {}): Long = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
         val workDir = File(command.first()).parentFile?.takeIf { it.isDirectory }
-        val p = ProcessBuilder(command).directory(workDir).redirectErrorStream(true)
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+        val pb = ProcessBuilder(command).directory(workDir).redirectErrorStream(true)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        cleanEnvironment(pb.environment(), ownDirs())
+        val p = pb.start()
         onStarted()
         val tracked = mutableSetOf<ProcessHandle>()
         while (p.isAlive) {
