@@ -262,14 +262,14 @@ fun StartupPanel(app: AppController, onClose: () -> Unit) {
         ToggleRow("Windows の起動時に起動する", "サインインしたときに、タスクトレイに常駐します", autostart, Autostart.supported) {
             autostart = app.setAutostart(it) && it
         }
-        if (!Autostart.supported) Note("インストールした emusync で設定できます（開発中の実行では使えません）")
+        if (!Autostart.supported) Note("インストールした EmuStation で設定できます（開発中の実行では使えません）")
         ToggleRow("起動時はタスクトレイに入れておく", "Windows の起動時は、ウィンドウを出さずにトレイに常駐します", c.startMinimized, true) { v ->
             app.update { it.copy(startMinimized = v) }
         }
         ToggleRow("1時間ごとに送信する", "手元の変更をサーバーに送ります（取得はしません。プレイ中の機種は送りません）", c.periodicPush, true) { v ->
             app.update { it.copy(periodicPush = v) }
         }
-        Note("ウィンドウを閉じても、emusync はタスクトレイに残ります。終了するときは、トレイのアイコンのメニューから「終了」を選んでください")
+        Note("ウィンドウを閉じても、EmuStation はタスクトレイに残ります。終了するときは、トレイのアイコンのメニューから「終了」を選んでください")
     }
 }
 
@@ -310,7 +310,7 @@ fun ControllerPanel(app: AppController, onClose: () -> Unit) {
         Note("十字キー・左スティック：選ぶ　LB・RB（L1・R1）：列を切り替える　Y（△）・メニュー（OPTIONS）：オプション　ビュー（CREATE）：全画面の切り替え")
         Note("画面の下の説明は、最後に触ったコントローラーの記号（PlayStation なら × ○ △）で出ます")
         Note("パネルやダイアログでは、上下でボタンや入力欄を移り、決定で押します。文字の入力は画面のキーボード（タッチ）を使ってください")
-        Note("ゲーム（エミュ）を遊んでいる間は、コントローラーの操作はエミュにだけ届きます。ゲームを終えると emusync が前に出ます")
+        Note("ゲーム（エミュ）を遊んでいる間は、コントローラーの操作はエミュにだけ届きます。ゲームを終えると EmuStation が前に出ます")
     }
 }
 
@@ -333,7 +333,7 @@ fun SoundsPanel(app: AppController, onClose: () -> Unit) {
             }
         }
         Label("音のファイル（MP3・WAV）")
-        Note("音のファイルはアプリには入っていません。持っている音のファイルを選ぶと、この PC の emusync のフォルダに写して使います")
+        Note("音のファイルはアプリには入っていません。持っている音のファイルを選ぶと、この PC の EmuStation のフォルダに写して使います")
         key(tick) {
             Sfx.entries.forEach { sfx ->
                 val file = com.emustation.emusync.desktop.platform.Sounds.fileOf(dir, sfx)
@@ -389,8 +389,8 @@ fun ThemePanel(app: AppController, onClose: () -> Unit) {
 @Composable
 fun AboutPanel(app: AppController, onClose: () -> Unit) {
     val c by app.config.collectAsState()
-    PanelScaffold("emusync について", onClose) {
-        Text("emusync", color = XmbText.primary, fontSize = 20.sp)
+    PanelScaffold("EmuStation について", onClose) {
+        Text("EmuStation", color = XmbText.primary, fontSize = 20.sp)
         Note("エミュのセーブを自宅のサーバーと同期するランチャー。同期の判定は Python 版・Android 版と同じです")
         Label("データの場所")
         SelectionContainer { Text(app.root.path, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }

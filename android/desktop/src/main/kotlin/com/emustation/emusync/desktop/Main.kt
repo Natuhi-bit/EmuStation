@@ -41,7 +41,7 @@ import kotlin.concurrent.thread
 import org.jetbrains.skia.Image
 
 /**
- * emusync（Windows 版）。タスクトレイに常駐し、ウィンドウを閉じてもトレイに残る。
+ * EmuStation（Windows 版）。タスクトレイに常駐し、ウィンドウを閉じてもトレイに残る。
  * `--minimized` で起動すると（Windows の起動時）、ウィンドウを出さずにトレイに入る。
  */
 fun main(args: Array<String>) {
@@ -99,7 +99,7 @@ fun main(args: Array<String>) {
         Tray(
             icon = icon,
             state = tray,
-            tooltip = "emusync",
+            tooltip = "EmuStation",
             onAction = { visible = true },
             menu = {
                 Item("開く", onClick = { visible = true })
@@ -112,7 +112,7 @@ fun main(args: Array<String>) {
         Window(
             onCloseRequest = { visible = false }, // 閉じてもトレイに残る
             visible = visible,
-            title = "emusync",
+            title = "EmuStation",
             icon = icon,
             state = windowState,
             onPreviewKeyEvent = { e ->

@@ -1,5 +1,5 @@
-# Windows 版 emusync のインストーラーを作る（Windows の環境でビルドする）
-# 結果は Actions の実行の「Artifacts」から emusync-setup をダウンロードする
+# Windows 版 EmuStation のインストーラーを作る（Windows の環境でビルドする）
+# 結果は Actions の実行の「Artifacts」から EmuStation-setup をダウンロードする
 name: Windows app
 
 on:
@@ -47,8 +47,8 @@ jobs:
         shell: pwsh
         working-directory: android/desktop/packaging
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.0.0 "/DAppDir=$PWD\..\build\compose\binaries\main\app\emusync" emusync.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.0.0 "/DAppDir=$PWD\..\build\compose\binaries\main\app\EmuStation" emusync.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: emusync-setup
+          name: EmuStation-setup
           path: android/desktop/packaging/output/*.exe

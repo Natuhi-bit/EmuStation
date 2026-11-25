@@ -6,7 +6,7 @@ import com.emustation.emusync.data.api.ApiException
 object Messages {
     fun connection(e: Throwable): String = when (e) {
         is ApiException.Unauthorized -> "トークンが無効です。設定のトークンを確認してください"
-        is ApiException.Offline -> e.httpCode?.let { "サーバーにつながりません（HTTP $it）。emusync サーバーが止まっている可能性があります" }
+        is ApiException.Offline -> e.httpCode?.let { "サーバーにつながりません（HTTP $it）。サーバー（emusync）が止まっている可能性があります" }
             ?: "サーバーにつながりません。VPN（WireGuard）を確認してください"
         is ApiException.Tls -> when (e.kind) {
             ApiException.Tls.Kind.UNTRUSTED -> "サーバーの証明書を信頼できません。自己署名の証明書なら、CA 証明書を取り込んでください"

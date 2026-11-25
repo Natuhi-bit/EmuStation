@@ -10,7 +10,7 @@ import kotlin.concurrent.thread
 
 val isWindows: Boolean = System.getProperty("os.name").startsWith("Windows")
 
-/** データの置き場所。Windows は %APPDATA%\emusync。テストでは EMUSYNC_DESKTOP_HOME で変えられる */
+/** データの置き場所。Windows は %APPDATA%\emusync（アプリの名前を EmuStation に変える前からの場所のまま。設定とゲームをそのまま使うため）。テストでは EMUSYNC_DESKTOP_HOME で変えられる */
 object AppPaths {
     val root: File by lazy {
         val override = System.getenv("EMUSYNC_DESKTOP_HOME")
@@ -47,7 +47,10 @@ object SecretBox {
 /** Windows にサインインしたときに起動する（HKCU の Run キー） */
 object Autostart {
     private const val KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-    private const val NAME = "emusync"
+    private const val NAME = "EmuStation"
+
+    /** 名前を変える前（emusync）の登録。見つけたら消す */
+    private const val OLD_NAME = "emusync"
 
     /** インストールしたアプリの exe（jpackage が設定する）。開発中は null */
     val exePath: String? get() = System.getProperty("jpackage.app-path")
@@ -58,6 +61,7 @@ object Autostart {
 
     fun set(enabled: Boolean): Boolean {
         if (!supported) return false
+        runReg("delete", KEY, "/v", OLD_NAME, "/f")
         return if (enabled) {
             runReg("add", KEY, "/v", NAME, "/t", "REG_SZ", "/d", "\"$exePath\" --minimized", "/f") == 0
         } else {

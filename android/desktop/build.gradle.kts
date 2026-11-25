@@ -56,15 +56,16 @@ compose.desktop {
         mainClass = "com.emustation.emusync.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Msi)
-            packageName = "emusync"
+            // アプリの名前（exe の名前・インストール先のフォルダ名にもなる）
+            packageName = "EmuStation"
             packageVersion = "1.0.0"
-            vendor = "emusync"
+            vendor = "EmuStation"
             description = "エミュのセーブを自宅サーバーと同期するランチャー"
             // suggestRuntimeModules の結果 ＋ TLS（楕円曲線の暗号）
             modules("java.instrument", "jdk.unsupported", "jdk.crypto.ec", "java.naming")
             windows {
                 iconFile.set(project.file("packaging/emusync.ico"))
-                menuGroup = "emusync"
+                menuGroup = "EmuStation"
                 upgradeUuid = "6b1f3a52-8a0e-4c3e-9a55-3f8f2a7f5e10"
             }
         }

@@ -131,7 +131,7 @@ fun buildCategories(
             ),
             XmbItem("startup", "起動と常駐", "Windows の起動時に起動・タスクトレイ・定期送信", Icons.Filled.PowerSettingsNew, onActivate = { open(Panel.Startup) }),
             XmbItem("theme", "テーマ", XmbThemes.byName(c.themeColor).label, Icons.Filled.Brush, onActivate = { open(Panel.Theme) }),
-            XmbItem("about", "emusync について", "データの場所・サーバーの管理画面", Icons.Filled.Info, onActivate = { open(Panel.About) }),
+            XmbItem("about", "EmuStation について", "データの場所・サーバーの管理画面", Icons.Filled.Info, onActivate = { open(Panel.About) }),
         ),
     )
 

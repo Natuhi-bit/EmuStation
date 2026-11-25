@@ -146,7 +146,7 @@ sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.p
 
 ## 3. Windows アプリ
 
-`android/desktop/` に Windows 用のアプリがある（Kotlin / Compose Desktop。同期の判定は Android 版と同じコードを使う）。
+`android/desktop/` に Windows 用のアプリ **EmuStation** がある（Kotlin / Compose Desktop。同期の判定は Android 版と同じコードを使う）。
 
 - **Steam のように、アプリを通してエミュを起動する**：ゲームを選んで Enter → ロック → クラウドと同期 → エミュを起動 →
   ゲームを閉じたら自動でクラウドに保存 → ロック解除。ほかの端末がプレイ中なら知らせる（奪って起動もできる）。
@@ -184,8 +184,8 @@ sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.p
 - データは `%APPDATA%\emusync`。トークンは Windows の DPAPI で守る。前回同期の記録は Python 版と同じ形（`state\<ターゲット>.json`）
 
 ### インストール
-GitHub の Actions の「Windows app」の実行結果から、Artifacts の **emusync-setup** をダウンロードして実行する
-（管理者の権限は要らない。`%LOCALAPPDATA%\Programs\emusync` に入る）。
+GitHub の Actions の「Windows app」の実行結果から、Artifacts の **EmuStation-setup** をダウンロードして実行する
+（管理者の権限は要らない。`%LOCALAPPDATA%\Programs\EmuStation` に入る。前の版（emusync の名前のもの）の上からそのまま入れ替わる）。
 インストーラーで「Windows の起動時に起動する」と「デスクトップのアイコン」を選べる。
 
 最初に、設定 → サーバーで URL（例 `https://192.168.50.49/emusync`）とトークン（管理画面の「端末」で発行）を入れ、
