@@ -269,6 +269,17 @@ class AppMonkeyTest {
         } catch (e: Throwable) {
             failWith("30 秒たっても進行中のダイアログが閉じない")
         }
+        // 最後の操作で開いたプレイのダイアログ（競合など。開いている間はロックを持つ作り）は［やめる］で閉じる
+        repeat(3) {
+            val cancel = compose.onAllNodes(hasAnyAncestor(isDialog()) and hasText("やめる") and hasClickAction())
+            if (cancel.fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()) {
+                note("［やめる］でダイアログを閉じる")
+                cancel[0].performClick()
+                compose.waitForIdle()
+                Thread.sleep(300)
+                compose.waitForIdle()
+            }
+        }
         val c = app.container
         runBlocking {
             // でたらめに書き換えられたサーバーの設定と、消されたデータフォルダを元に戻す（つながらないままでは確かめられない）
