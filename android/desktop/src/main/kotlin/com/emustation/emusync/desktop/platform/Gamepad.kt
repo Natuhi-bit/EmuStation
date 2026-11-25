@@ -8,11 +8,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** コントローラーのボタン（Xbox の並び。ROG Ally・Xbox のコントローラーなど XInput のもの） */
+/**
+ * コントローラーのボタン。位置で呼ぶ（Xbox の名前）：A＝下（PlayStation の ×）、B＝右（○）、X＝左（□）、Y＝上（△）、
+ * LB・RB＝L1・R1、Start＝メニュー（OPTIONS）、Back＝ビュー（SHARE・CREATE）
+ */
 enum class PadButton { Up, Down, Left, Right, A, B, X, Y, LB, RB, Start, Back }
 
-/** ある瞬間に押されているボタン（スティックの倒しも上下左右に直したもの） */
-data class PadState(val pressed: Set<PadButton>) {
+/** ボタンの表示の種類（画面の下の説明を、そのコントローラーの記号で出す） */
+enum class PadStyle { Xbox, PlayStation, Nintendo }
+
+/** ある瞬間に押されているボタン（スティックの倒しも上下左右に直したもの）と、押したコントローラーの種類 */
+data class PadState(val pressed: Set<PadButton>, val style: PadStyle? = null) {
     companion object {
         val NONE = PadState(emptySet())
 
@@ -36,6 +42,16 @@ data class PadState(val pressed: Set<PadButton>) {
                 }
             }
             return PadState(s)
+        }
+
+        /** 左スティックの倒しを上下左右に（XInput と同じく上が +） */
+        fun stick(lx: Int, ly: Int): PadButton? {
+            if (maxOf(kotlin.math.abs(lx), kotlin.math.abs(ly)) < STICK_THRESHOLD) return null
+            return if (kotlin.math.abs(lx) > kotlin.math.abs(ly)) {
+                if (lx > 0) PadButton.Right else PadButton.Left
+            } else {
+                if (ly > 0) PadButton.Up else PadButton.Down
+            }
         }
     }
 }
@@ -132,6 +148,33 @@ object Gamepad {
     var dispatching = false
 
     fun markPad() { _lastInputWasPad.value = true }
+
+    private val _style = MutableStateFlow(PadStyle.Xbox)
+
+    /** 最後に押したコントローラーの種類 */
+    val style: StateFlow<PadStyle> = _style.asStateFlow()
+
+    fun setStyle(s: PadStyle) { _style.value = s }
+
+    /** ボタンの記号（画面の説明用）。位置で決まる */
+    fun label(b: PadButton, s: PadStyle = style.value): String = when (s) {
+        PadStyle.PlayStation -> when (b) {
+            PadButton.A -> "×"; PadButton.B -> "○"; PadButton.X -> "□"; PadButton.Y -> "△"
+            PadButton.LB -> "L1"; PadButton.RB -> "R1"; PadButton.Start -> "OPTIONS"; PadButton.Back -> "CREATE"
+            else -> "✚"
+        }
+        // Switch のプロコンは位置と文字が逆（右が A、下が B）
+        PadStyle.Nintendo -> when (b) {
+            PadButton.A -> "B"; PadButton.B -> "A"; PadButton.X -> "Y"; PadButton.Y -> "X"
+            PadButton.LB -> "L"; PadButton.RB -> "R"; PadButton.Start -> "+"; PadButton.Back -> "−"
+            else -> "✚"
+        }
+        PadStyle.Xbox -> when (b) {
+            PadButton.LB -> "LB"; PadButton.RB -> "RB"; PadButton.Start -> "メニュー"; PadButton.Back -> "ビュー"
+            PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right -> "✚"
+            else -> b.name
+        }
+    }
 
     fun markKeyboard() { if (!dispatching) _lastInputWasPad.value = false }
 }

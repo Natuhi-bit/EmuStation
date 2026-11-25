@@ -75,6 +75,7 @@ import com.emustation.emusync.desktop.domain.Presets
 import com.emustation.emusync.desktop.domain.ServerStatus
 import com.emustation.emusync.desktop.domain.SystemStatus
 import com.emustation.emusync.desktop.platform.Gamepad
+import com.emustation.emusync.desktop.platform.PadButton
 import com.emustation.emusync.desktop.platform.PadMode
 import com.emustation.emusync.domain.sync.SyncMode
 import kotlinx.coroutines.delay
@@ -283,12 +284,19 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
         Header(now, Modifier.align(Alignment.TopEnd).padding(24.dp), server)
         Xmb(cats, state)
         val pad by Gamepad.lastInputWasPad.collectAsState()
-        val (ok, back) = if (c.confirmButton == "B") "B" to "A" else "A" to "B"
+        val style by Gamepad.style.collectAsState()
+        // 決定・戻るのボタン（位置）。記号はコントローラーの種類で（PlayStation なら × ○）
+        val (okBtn, backBtn) = if (c.confirmButton == "B") PadButton.B to PadButton.A else PadButton.A to PadButton.B
+        val ok = Gamepad.label(okBtn, style)
+        val back = Gamepad.label(backBtn, style)
         KeyHints(
             when {
                 !pad -> listOf("←→↑↓" to "選ぶ", "Enter" to "決定", "Tab" to "オプション", "Esc" to "戻る")
                 panel != null || phase != null -> listOf("↑↓" to "選ぶ", ok to "決定", back to "戻る")
-                else -> listOf("✚" to "選ぶ", "LB RB" to "切り替え", ok to "決定", "Y" to "オプション", back to "戻る")
+                else -> listOf(
+                    "✚" to "選ぶ", "${Gamepad.label(PadButton.LB, style)} ${Gamepad.label(PadButton.RB, style)}" to "切り替え",
+                    ok to "決定", Gamepad.label(PadButton.Y, style) to "オプション", back to "戻る",
+                )
             },
             Modifier.align(Alignment.BottomEnd).padding(24.dp),
         )
@@ -351,7 +359,10 @@ private fun PlayOverlay(app: AppController, p: PlayPhase, openConflicts: (String
     val g = p.game ?: return
     // コントローラー・キーボードですぐ押せるように、最初に選んでおくボタン（危なくない方）
     val first = remember { FocusRequester() }
-    LaunchedEffect(p::class) { runCatching { first.requestFocus() } }
+    LaunchedEffect(p::class) {
+        // 準備中・プレイ中はボタンがない
+        if (p !is PlayPhase.Working && p !is PlayPhase.Playing) runCatching { first.requestFocus() }
+    }
     Box(Modifier.fillMaxSize().background(Color(0xB0000000)), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 560.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xF0111824)).padding(28.dp).testTag("play-overlay"),

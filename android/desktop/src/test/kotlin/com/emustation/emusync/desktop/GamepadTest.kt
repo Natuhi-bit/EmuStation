@@ -66,7 +66,10 @@ class GamepadTest {
     val tmp = TemporaryFolder()
 
     @org.junit.After
-    fun resetInputMode() = Gamepad.markKeyboard()
+    fun resetInputMode() {
+        Gamepad.markKeyboard()
+        Gamepad.setStyle(com.emustation.emusync.desktop.platform.PadStyle.Xbox)
+    }
 
     // ---------------------------------------------------------------- 読み取りと割り当て
     @Test
@@ -106,6 +109,45 @@ class GamepadTest {
         // B で決定（PS3 の日本の並び）
         assertEquals(KeyEvent.VK_ENTER, PadKeys.map(B, PadMode.Xmb, confirmIsB = true)!!.code)
         assertEquals(KeyEvent.VK_ESCAPE, PadKeys.map(A, PadMode.Xmb, confirmIsB = true)!!.code)
+    }
+
+    @Test
+    fun playStationAndSwitch_labelsAndTypes() {
+        val ps = com.emustation.emusync.desktop.platform.PadStyle.PlayStation
+        val ns = com.emustation.emusync.desktop.platform.PadStyle.Nintendo
+        assertEquals("×", Gamepad.label(A, ps))
+        assertEquals("○", Gamepad.label(B, ps))
+        assertEquals("△", Gamepad.label(Y, ps))
+        assertEquals("L1", Gamepad.label(LB, ps))
+        assertEquals("B", Gamepad.label(A, ns)) // Switch は下が B
+        assertEquals("A", Gamepad.label(B, ns))
+        assertEquals("A", Gamepad.label(A))
+        val sdl = com.emustation.emusync.desktop.platform.SdlSource
+        assertEquals(ps, sdl.styleOf(org.lwjgl.sdl.SDLGamepad.SDL_GAMEPAD_TYPE_PS4))
+        assertEquals(ps, sdl.styleOf(org.lwjgl.sdl.SDLGamepad.SDL_GAMEPAD_TYPE_PS5))
+        assertEquals(ns, sdl.styleOf(org.lwjgl.sdl.SDLGamepad.SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO))
+        assertEquals(com.emustation.emusync.desktop.platform.PadStyle.Xbox, sdl.styleOf(org.lwjgl.sdl.SDLGamepad.SDL_GAMEPAD_TYPE_XBOXONE))
+        // 12 のボタンがすべて割り当てられている
+        assertEquals(PadButton.entries.toSet(), sdl.BUTTONS.map { it.second }.toSet())
+        // スティック：SDL は下が +（読むところで直す）。ここでは上が + の値で確かめる
+        assertEquals(Up, PadState.stick(0, 30000))
+        assertEquals(null, PadState.stick(1000, -1000))
+    }
+
+    /** SDL（ネイティブのライブラリ）が読み込めて、コントローラーがなくても動くこと */
+    @Test
+    fun sdl_opensAndPollsWithoutControllers() {
+        var result: Result<PadState>? = null
+        val t = Thread {
+            result = runCatching {
+                val src = com.emustation.emusync.desktop.platform.SdlSource.open() ?: error("SDL を開けない")
+                repeat(3) { src.poll() }
+                src.poll()
+            }
+        }
+        t.start(); t.join(20_000)
+        val r = result ?: error("SDL の初期化が終わらない")
+        assertEquals(emptySet<PadButton>(), r.getOrThrow().pressed)
     }
 
     // ---------------------------------------------------------------- コントローラーだけで操作する
@@ -202,6 +244,10 @@ class GamepadTest {
         compose.waitUntil(10_000) { app.play.phase.value is PlayPhase.Conflicts }
         compose.waitForIdle()
         assertEquals("win", server.lockHolder("ps2"))
+        Gamepad.setStyle(com.emustation.emusync.desktop.platform.PadStyle.PlayStation)
+        Gamepad.markPad()
+        compose.waitForIdle()
+        shot("desktop-pad-playstation-dialog")
         pad(B) // やめる
         compose.waitUntil(10_000) { app.play.phase.value == null && server.lockHolder("ps2") == null }
     }
@@ -230,10 +276,10 @@ class GamepadTest {
         repeat(15) {
             if (!chosen) {
                 pad(Down)
-                if (focusedHasText("B で決定")) { shot("desktop-controller-focus"); pad(A); chosen = true }
+                if (focusedHasText("右のボタンで決定")) { shot("desktop-controller-focus"); pad(A); chosen = true }
             }
         }
-        assertTrue("「B で決定」を選べない", chosen)
+        assertTrue("「右のボタンで決定」を選べない", chosen)
         assertEquals("B", app.config.value.confirmButton)
         // 決定と戻るが入れ替わったので、A で閉じる
         pad(A)

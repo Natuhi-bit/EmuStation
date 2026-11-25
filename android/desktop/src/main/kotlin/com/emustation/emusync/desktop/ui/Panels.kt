@@ -287,19 +287,27 @@ private fun ToggleRow(title: String, sub: String, checked: Boolean, enabled: Boo
 fun ControllerPanel(app: AppController, onClose: () -> Unit) {
     val c by app.config.collectAsState()
     PanelScaffold("コントローラー", onClose) {
-        ToggleRow("コントローラーで操作する", "ROG Ally・Xbox のコントローラーなど（XInput）", c.gamepad, true) { v ->
-            app.update { it.copy(gamepad = v) }
-        }
+        ToggleRow(
+            "コントローラーで操作する",
+            "PlayStation（DualShock 4・DualSense）・Xbox・ROG Ally・Switch のプロコン など",
+            c.gamepad, true,
+        ) { v -> app.update { it.copy(gamepad = v) } }
         Label("決定のボタン")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(c.confirmButton == "A", { app.update { it.copy(confirmButton = "A") } }, { Text("A で決定・B で戻る") }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)))
-            FilterChip(c.confirmButton == "B", { app.update { it.copy(confirmButton = "B") } }, { Text("B で決定・A で戻る（PS3 の日本の並び）") }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                c.confirmButton == "A", { app.update { it.copy(confirmButton = "A") } },
+                { Text("下のボタンで決定（Xbox の A・PS の ×）") }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)),
+            )
+            FilterChip(
+                c.confirmButton == "B", { app.update { it.copy(confirmButton = "B") } },
+                { Text("右のボタンで決定（Xbox の B・PS の ○。PS4 までの日本の並び）") }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)),
+            )
         }
         Label("ボタンの割り当て")
-        Note("十字キー・左スティック：選ぶ　LB・RB：列を切り替える　Y・メニュー：オプション　ビュー：全画面の切り替え")
+        Note("十字キー・左スティック：選ぶ　LB・RB（L1・R1）：列を切り替える　Y（△）・メニュー（OPTIONS）：オプション　ビュー（CREATE）：全画面の切り替え")
+        Note("画面の下の説明は、最後に触ったコントローラーの記号（PlayStation なら × ○ △）で出ます")
         Note("パネルやダイアログでは、上下でボタンや入力欄を移り、決定で押します。文字の入力は画面のキーボード（タッチ）を使ってください")
         Note("ゲーム（エミュ）を遊んでいる間は、コントローラーの操作はエミュにだけ届きます。ゲームを終えると emusync が前に出ます")
-        Note("PlayStation のコントローラーは、Steam などで Xbox のコントローラーとして使えるようにすると操作できます")
     }
 }
 

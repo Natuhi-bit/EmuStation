@@ -1,5 +1,6 @@
 package com.emustation.emusync.desktop
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,16 +27,17 @@ import com.emustation.emusync.desktop.platform.AwtKeys
 import com.emustation.emusync.desktop.platform.Gamepad
 import com.emustation.emusync.desktop.platform.PadKeys
 import com.emustation.emusync.desktop.platform.PadRepeater
+import com.emustation.emusync.desktop.platform.PadSource
+import com.emustation.emusync.desktop.platform.PadState
+import com.emustation.emusync.desktop.platform.SdlSource
 import com.emustation.emusync.desktop.platform.SingleInstance
 import com.emustation.emusync.desktop.platform.XInputSource
 import com.emustation.emusync.desktop.ui.EmusyncTheme
 import com.emustation.emusync.desktop.ui.XmbApp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.SwingUtilities
+import kotlin.concurrent.thread
 import org.jetbrains.skia.Image
 
 /**
@@ -56,6 +58,29 @@ fun main(args: Array<String>) {
     val icon = BitmapPainter(
         Image.makeFromEncoded(Thread.currentThread().contextClassLoader.getResourceAsStream("icon.png")!!.readBytes()).toComposeImageBitmap(),
     )
+
+    // コントローラー：専用のスレッドで読み（SDL は同じスレッドから使う決まり）、押されたボタンをキーに直してウィンドウに送る。
+    // SDL（PlayStation・Xbox・Switch Pro など）が使えなければ XInput（Xbox・ROG Ally）。ウィンドウが前のときだけ送る（エミュで遊んでいる間は送らない）
+    val padTarget = AtomicReference<java.awt.Window?>(null)
+    thread(isDaemon = true, name = "gamepad") {
+        val source: PadSource = SdlSource.open() ?: XInputSource.open() ?: return@thread
+        val repeater = PadRepeater()
+        while (true) {
+            val state = runCatching { source.poll() }.getOrDefault(PadState.NONE)
+            val presses = repeater.update(state, System.currentTimeMillis())
+            val c = app.config.value
+            if (presses.isNotEmpty() && c.gamepad) {
+                SwingUtilities.invokeLater {
+                    val w = padTarget.get()
+                    if (w == null || !w.isActive) return@invokeLater
+                    state.style?.let(Gamepad::setStyle)
+                    Gamepad.markPad()
+                    presses.forEach { b -> PadKeys.map(b, Gamepad.mode, c.confirmButton == "B")?.let { AwtKeys.send(w, it) } }
+                }
+            }
+            Thread.sleep(16)
+        }
+    }
 
     application {
         var visible by remember { mutableStateOf(!startHidden) }
@@ -97,24 +122,10 @@ fun main(args: Array<String>) {
             },
         ) {
             LaunchedEffect(visible, reopen) { if (visible) window.toFront() }
-            // コントローラー：押されたボタンをキーに直して、このウィンドウに送る（ほかのアプリ（エミュ）が前のときは送らない）
-            LaunchedEffect(Unit) {
-                val source = XInputSource.open() ?: return@LaunchedEffect
-                withContext(Dispatchers.IO) {
-                    val repeater = PadRepeater()
-                    while (isActive) {
-                        val presses = repeater.update(source.poll(), System.currentTimeMillis())
-                        val c = app.config.value
-                        if (presses.isNotEmpty() && c.gamepad) {
-                            SwingUtilities.invokeLater {
-                                if (!window.isActive) return@invokeLater
-                                Gamepad.markPad()
-                                presses.forEach { b -> PadKeys.map(b, Gamepad.mode, c.confirmButton == "B")?.let { AwtKeys.send(window, it) } }
-                            }
-                        }
-                        delay(16)
-                    }
-                }
+            // コントローラーのボタンを送る先（このウィンドウ）
+            DisposableEffect(window) {
+                padTarget.set(window)
+                onDispose { padTarget.compareAndSet(window, null) }
             }
             // ゲームを終えたら（エミュを閉じたら）、このウィンドウを前に出す（コントローラーでそのまま操作できるように）
             LaunchedEffect(Unit) {

@@ -24,6 +24,13 @@ dependencies {
     implementation(compose.materialIconsExtended)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.jna.platform)
+    // コントローラー（PlayStation・Xbox・Switch Pro など）を SDL3 で読む。配るのは Windows 用のネイティブ、テストは Linux 用
+    implementation(libs.lwjgl.core)
+    implementation(libs.lwjgl.sdl)
+    for (lib in listOf(libs.lwjgl.core, libs.lwjgl.sdl)) {
+        runtimeOnly(variantOf(lib) { classifier("natives-windows") })
+        testRuntimeOnly(variantOf(lib) { classifier("natives-linux") })
+    }
 
     testImplementation(testFixtures(project(":core")))
     testImplementation(libs.junit)
