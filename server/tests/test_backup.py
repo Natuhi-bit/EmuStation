@@ -407,3 +407,11 @@ def test_download_zip_andRestoreFromIt(admin, core):
     src = ZipSource(zpath)
     core.ADMIN.backup.restore_all(src, src.snapshot_id)
     assert state(admin, h) == before
+
+
+def test_readOnlyAndPermissionErrors_areExplained():
+    import errno
+    from backup import explain
+    m = explain(OSError(errno.EROFS, "Read-only file system", "/mnt/x/.write-test"), "/mnt/x")
+    assert "ReadWritePaths" in m and "/mnt/x" in m
+    assert "chown emusync" in explain(PermissionError(errno.EACCES, "Permission denied", "/mnt/x"), "/mnt/x")

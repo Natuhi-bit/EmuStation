@@ -93,9 +93,13 @@ python -m pytest server/tests
 | サーバーの別のディスク | フォルダ（例 `/mnt/backup/emusync-backup`）。サーバーのデータと同じディスクは選べない（つながっていない USB の HDD に気づかず同じディスクへ書くのを防ぐ） |
 | 手元にダウンロード | 「手元にダウンロード（zip）」で、今の状態を zip で保存 |
 
-別のディスクは、emusync のユーザーが書けるようにしておく：
+別のディスクは、emusync のユーザーが書けるようにし、emusync.service（ProtectSystem=strict で /var/lib/emusync 以外は読み取り専用）
+から書けるように許可する：
 ```bash
 sudo mkdir -p /mnt/backup/emusync-backup && sudo chown emusync: /mnt/backup/emusync-backup
+sudo mkdir -p /etc/systemd/system/emusync.service.d
+printf '[Service]\nReadWritePaths=-/mnt/backup/emusync-backup\n' | sudo tee /etc/systemd/system/emusync.service.d/backup.conf
+sudo systemctl daemon-reload && sudo systemctl restart emusync
 ```
 
 **戻し方**

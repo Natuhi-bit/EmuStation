@@ -51,6 +51,20 @@ class BackupError(Exception):
     pass
 
 
+def explain(e: Exception, where: str = "") -> str:
+    """エラーを、どうすればよいかの分かる文に"""
+    import errno
+    if isinstance(e, BackupError):
+        return str(e)
+    if isinstance(e, OSError) and e.errno == errno.EROFS:
+        return (f"{where or e.filename} に書き込めません（読み取り専用）。emusync.service が ProtectSystem=strict で動いているときは、"
+                "/etc/systemd/system/emusync.service.d/backup.conf に [Service] ReadWritePaths=-<フォルダ> を書いて "
+                "systemctl daemon-reload と restart をしてください")
+    if isinstance(e, OSError) and e.errno in (errno.EACCES, errno.EPERM):
+        return f"{where or e.filename} に書き込む権限がありません（chown emusync: <フォルダ> で emusync のユーザーが書けるようにしてください）"
+    return f"{type(e).__name__}: {e}"
+
+
 # ---------------------------------------------------------------- 置き場所
 class LocalDest:
     """サーバーの別のディスク・フォルダ"""
@@ -526,7 +540,7 @@ class BackupManager:
                     self._set_status(d.name, last_ok=time.time(), last_error=None, last_snapshot=r["id"])
                     results[d.name] = r
                 except Exception as e:  # noqa: BLE001
-                    msg = str(e) if isinstance(e, BackupError) else f"{type(e).__name__}: {e}"
+                    msg = explain(e, str(getattr(d, "root", "")) or None)
                     self._set_status(d.name, last_error=msg, last_error_at=time.time())
                     results[d.name] = {"error": msg}
             self._set_status("_all", last_run=time.time())

@@ -549,7 +549,7 @@ def build_router(core: Core) -> APIRouter:
                 d.check(core.data_dir) if isinstance(d, _backup.LocalDest) else d.check()
                 out[d.name] = {"ok": True}
             except Exception as e:  # noqa: BLE001
-                out[d.name] = {"ok": False, "error": str(e) if isinstance(e, _backup.BackupError) else f"{type(e).__name__}: {e}"}
+                out[d.name] = {"ok": False, "error": _backup.explain(e, str(getattr(d, "root", "")) or None)}
         if not out:
             raise HTTPException(400, "置き場所が設定されていません")
         return out
