@@ -45,6 +45,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -79,6 +82,7 @@ sealed interface Panel {
     data object Server : Panel
     data class System(val target: String) : Panel
     data object Startup : Panel
+    data object Controller : Panel
     data object Theme : Panel
     data object About : Panel
     data class EditGame(val gameId: String?, val target: String? = null) : Panel
@@ -107,11 +111,15 @@ fun formatPlayTime(sec: Long): String = when {
 
 @Composable
 fun PanelScaffold(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxHeight().width(600.dp).background(Color(0xF00B111B))) {
+    // 開いたらパネルにフォーカスを移す（Esc・コントローラーの B で閉じられ、下・Tab で中のボタンや入力欄へ進めるように）。
+    // ボタンではなくパネルそのものに置くので、開いた直後に決定を押しても何も起きない
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Box(Modifier.fillMaxHeight().width(600.dp).background(Color(0xF00B111B)).focusRequester(focus).focusable()) {
         Column(Modifier.fillMaxHeight().padding(start = 32.dp, end = 24.dp, top = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, color = XmbText.primary, fontSize = 22.sp, modifier = Modifier.weight(1f))
-                IconButton(onClick = onClose, modifier = Modifier.testTag("panel-close")) {
+                IconButton(onClick = onClose, modifier = Modifier.testTag("panel-close").focusRing()) {
                     Icon(Icons.Filled.Close, "閉じる", tint = XmbText.secondary)
                 }
             }
@@ -138,7 +146,7 @@ private fun Field(value: String, onChange: (String) -> Unit, label: String, modi
         value, onChange, label = { Text(label) }, singleLine = singleLine,
         visualTransformation = if (password && !show) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = if (password) {
-            { IconButton(onClick = { show = !show }) { Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, null) } }
+            { IconButton(onClick = { show = !show }, modifier = Modifier.focusRing()) { Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, null) } }
         } else null,
         modifier = modifier.fillMaxWidth().let { if (tag != null) it.testTag(tag) else it },
     )
@@ -159,14 +167,14 @@ fun ServerPanel(app: AppController, onClose: () -> Unit) {
         Field(url, { url = it; result = null }, "サーバー URL（例 https://192.168.50.49/emusync）", tag = "server-url")
         Field(token, { token = it; result = null }, "トークン（管理画面の「端末」で発行）", password = true, tag = "server-token")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { app.saveServer(url, token); result = true to "保存しました" }) { Text("保存") }
+            Button(onClick = { app.saveServer(url, token); result = true to "保存しました" }, modifier = Modifier.focusRing()) { Text("保存") }
             OutlinedButton(enabled = !testing, onClick = {
                 testing = true
                 scope.launch {
                     result = app.testConnection(url, token).fold({ true to "接続できました（この PC: $it）" }, { false to (it.message ?: "失敗しました") })
                     testing = false
                 }
-            }) { Text("接続テスト") }
+            }, modifier = Modifier.focusRing()) { Text("接続テスト") }
         }
         if (testing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         result?.let { (ok, msg) -> Note(msg, if (ok) XmbText.ok else XmbText.error) }
@@ -184,8 +192,8 @@ fun ServerPanel(app: AppController, onClose: () -> Unit) {
                     result = runCatching { fingerprint = app.importCa(f); true to "取り込みました" }
                         .getOrElse { false to "証明書として読み込めませんでした" }
                 }
-            }) { Text(if (fingerprint == null) "取り込む" else "取り込み直す") }
-            if (fingerprint != null) TextButton(onClick = { app.removeCa(); fingerprint = null }) { Text("削除") }
+            }, modifier = Modifier.focusRing()) { Text(if (fingerprint == null) "取り込む" else "取り込み直す") }
+            if (fingerprint != null) TextButton(onClick = { app.removeCa(); fingerprint = null }, modifier = Modifier.focusRing()) { Text("削除") }
         }
     }
 }
@@ -207,22 +215,22 @@ fun SystemPanel(app: AppController, target: String, onClose: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(exe, { exe = it }, "エミュの実行ファイル（${preset?.exeNames?.first() ?: ".exe"}）", Modifier.weight(1f), tag = "emu-exe")
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { Pickers.file("エミュを選ぶ", setOf("exe"))?.let { exe = it.path } }) { Text("選ぶ") }
+            OutlinedButton(onClick = { Pickers.file("エミュを選ぶ", setOf("exe"))?.let { exe = it.path } }, modifier = Modifier.focusRing()) { Text("選ぶ") }
         }
         Field(args, { args = it }, "起動の引数（{rom} がゲームのパスになります）")
         preset?.let { p ->
-            if (args != p.args) TextButton(onClick = { args = p.args }) { Text("既定に戻す（${p.args}）") }
+            if (args != p.args) TextButton(onClick = { args = p.args }, modifier = Modifier.focusRing()) { Text("既定に戻す（${p.args}）") }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(save, { save = it }, "セーブのフォルダ（同期するフォルダ）", Modifier.weight(1f), tag = "emu-save")
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { Pickers.folder("セーブのフォルダを選ぶ", save.ifBlank { null })?.let { save = it.path } }) { Text("選ぶ") }
+            OutlinedButton(onClick = { Pickers.folder("セーブのフォルダを選ぶ", save.ifBlank { null })?.let { save = it.path } }, modifier = Modifier.focusRing()) { Text("選ぶ") }
         }
         if (preset != null) {
             TextButton(onClick = {
                 val found = Presets.findSavePath(preset, exe)
                 if (found != null) save = found else msg = "見つかりませんでした。エミュの設定でセーブの場所を確かめて、選んでください"
-            }) { Text("セーブのフォルダを自動で探す") }
+            }, modifier = Modifier.focusRing()) { Text("セーブのフォルダを自動で探す") }
         }
         when {
             save.isNotBlank() && File(save).absoluteFile.parentFile?.isDirectory != true -> Note("このフォルダの親フォルダが見つかりません", XmbText.error)
@@ -231,13 +239,13 @@ fun SystemPanel(app: AppController, target: String, onClose: () -> Unit) {
         Field(excludes, { excludes = it }, "除外パターン（1行に1つ。例 *.bak）", singleLine = false)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("この機種を同期する", color = XmbText.primary, modifier = Modifier.weight(1f))
-            Switch(enabled, { enabled = it })
+            Switch(enabled, { enabled = it }, modifier = Modifier.focusRing())
         }
         Button(onClick = {
             app.saveSystem(SystemConfig(target, exe.trim(), args.trim(), save.trim(), excludes.lines().map { it.trim() }.filter { it.isNotEmpty() }, enabled))
             msg = "保存しました"
             app.refresh()
-        }, modifier = Modifier.testTag("emu-save-button")) { Text("保存") }
+        }, modifier = Modifier.testTag("emu-save-button").focusRing()) { Text("保存") }
         msg?.let { Note(it, XmbText.ok) }
     }
 }
@@ -270,7 +278,28 @@ private fun ToggleRow(title: String, sub: String, checked: Boolean, enabled: Boo
             Note(sub)
         }
         Spacer(Modifier.width(12.dp))
-        Switch(checked, onChange, enabled = enabled)
+        Switch(checked, onChange, enabled = enabled, modifier = Modifier.focusRing())
+    }
+}
+
+// ---------------------------------------------------------------- 設定：コントローラー
+@Composable
+fun ControllerPanel(app: AppController, onClose: () -> Unit) {
+    val c by app.config.collectAsState()
+    PanelScaffold("コントローラー", onClose) {
+        ToggleRow("コントローラーで操作する", "ROG Ally・Xbox のコントローラーなど（XInput）", c.gamepad, true) { v ->
+            app.update { it.copy(gamepad = v) }
+        }
+        Label("決定のボタン")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(c.confirmButton == "A", { app.update { it.copy(confirmButton = "A") } }, { Text("A で決定・B で戻る") }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)))
+            FilterChip(c.confirmButton == "B", { app.update { it.copy(confirmButton = "B") } }, { Text("B で決定・A で戻る（PS3 の日本の並び）") }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)))
+        }
+        Label("ボタンの割り当て")
+        Note("十字キー・左スティック：選ぶ　LB・RB：列を切り替える　Y・メニュー：オプション　ビュー：全画面の切り替え")
+        Note("パネルやダイアログでは、上下でボタンや入力欄を移り、決定で押します。文字の入力は画面のキーボード（タッチ）を使ってください")
+        Note("ゲーム（エミュ）を遊んでいる間は、コントローラーの操作はエミュにだけ届きます。ゲームを終えると emusync が前に出ます")
+        Note("PlayStation のコントローラーは、Steam などで Xbox のコントローラーとして使えるようにすると操作できます")
     }
 }
 
@@ -306,8 +335,8 @@ fun AboutPanel(app: AppController, onClose: () -> Unit) {
         Label("データの場所")
         SelectionContainer { Text(app.root.path, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { Pickers.open(app.root) }) { Text("フォルダを開く") }
-            if (c.serverUrl.isNotBlank()) OutlinedButton(onClick = { Pickers.browse(c.serverUrl.trimEnd('/') + "/admin/") }) { Text("サーバーの管理画面を開く") }
+            OutlinedButton(onClick = { Pickers.open(app.root) }, modifier = Modifier.focusRing()) { Text("フォルダを開く") }
+            if (c.serverUrl.isNotBlank()) OutlinedButton(onClick = { Pickers.browse(c.serverUrl.trimEnd('/') + "/admin/") }, modifier = Modifier.focusRing()) { Text("サーバーの管理画面を開く") }
         }
     }
 }
@@ -325,7 +354,7 @@ fun EditGamePanel(app: AppController, gameId: String?, presetTarget: String?, on
     PanelScaffold(if (existing == null) "ゲームを追加" else "プロパティ", onClose) {
         Label("機種")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Presets.all.forEach { p -> FilterChip(target == p.target, { target = p.target }, { Text(p.machine) }) }
+            Presets.all.forEach { p -> FilterChip(target == p.target, { target = p.target }, { Text(p.machine) }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp))) }
         }
         if (c.system(target)?.emulatorExe.isNullOrBlank()) Note("${Presets.machineOf(target)} のエミュがまだ設定されていません（設定 → エミュレーター）", XmbText.warn)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -337,14 +366,14 @@ fun EditGamePanel(app: AppController, gameId: String?, presetTarget: String?, on
                         rom = it.path
                         if (title.isBlank()) title = LibraryScanner.cleanTitle(it.nameWithoutExtension)
                     }
-                }) { Text("選ぶ") }
+                }, modifier = Modifier.focusRing()) { Text("選ぶ") }
             }
         }
         Field(title, { title = it }, "タイトル", tag = "game-title")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(cover, { cover = it }, "カバー画像（任意。PNG・JPG）", Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { Pickers.file("カバー画像を選ぶ", setOf("png", "jpg", "jpeg", "webp"))?.let { cover = it.path } }) { Text("選ぶ") }
+            OutlinedButton(onClick = { Pickers.file("カバー画像を選ぶ", setOf("png", "jpg", "jpeg", "webp"))?.let { cover = it.path } }, modifier = Modifier.focusRing()) { Text("選ぶ") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
@@ -374,14 +403,14 @@ fun EditGamePanel(app: AppController, gameId: String?, presetTarget: String?, on
                     }
                     onClose()
                 },
-                modifier = Modifier.testTag("game-save"),
+                modifier = Modifier.testTag("game-save").focusRing(),
             ) { Text(if (existing == null) "ライブラリに追加" else "保存") }
-            if (existing != null) TextButton(onClick = { app.removeGame(existing.id); onClose() }) { Text("ライブラリから外す", color = XmbText.error) }
+            if (existing != null) TextButton(onClick = { app.removeGame(existing.id); onClose() }, modifier = Modifier.focusRing()) { Text("ライブラリから外す", color = XmbText.error) }
         }
         if (existing != null) {
             Note("プレイ時間 ${formatPlayTime(existing.playSeconds)}・最後のプレイ ${formatTime(existing.lastPlayedAt)}")
             Note(listOfNotNull(existing.serial?.let { "型番 $it" }, existing.region?.let { "地域 $it" }).joinToString("・").ifEmpty { "型番：まだ分かりません" })
-            OutlinedButton(onClick = { app.fetchInfo(listOf(existing.id), again = true); onClose() }) { Text("情報とカバーを取得し直す") }
+            OutlinedButton(onClick = { app.fetchInfo(listOf(existing.id), again = true); onClose() }, modifier = Modifier.focusRing()) { Text("情報とカバーを取得し直す") }
         } else {
             Note("追加すると、日本語のタイトル・型番・カバーをインターネットから自動で取得します（自分で入れたタイトル・カバーはそのまま）")
         }
@@ -401,13 +430,13 @@ fun ScanPanel(app: AppController, presetTarget: String?, onClose: () -> Unit) {
     val known = c.games.map { it.rom }.toSet()
     PanelScaffold("フォルダからゲームを探す", onClose) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Presets.all.forEach { p -> FilterChip(target == p.target, { target = p.target; found.clear() }, { Text(p.machine) }) }
+            Presets.all.forEach { p -> FilterChip(target == p.target, { target = p.target; found.clear() }, { Text(p.machine) }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp))) }
         }
         Note(Presets.byTarget(target)?.romHint.orEmpty())
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(folder, { folder = it }, if (target == "vita") "Vita3K のフォルダ（ux0 がある場所）" else "ゲームのフォルダ", Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { Pickers.folder("フォルダを選ぶ", folder.ifBlank { null })?.let { folder = it.path } }) { Text("選ぶ") }
+            OutlinedButton(onClick = { Pickers.folder("フォルダを選ぶ", folder.ifBlank { null })?.let { folder = it.path } }, modifier = Modifier.focusRing()) { Text("選ぶ") }
         }
         Button(enabled = folder.isNotBlank() && !scanning, onClick = {
             scanning = true
@@ -417,13 +446,13 @@ fun ScanPanel(app: AppController, presetTarget: String?, onClose: () -> Unit) {
                 checked.clear(); checked.addAll(r.map { it.rom }.filter { it !in known })
                 scanning = false
             }
-        }) { Text("探す") }
+        }, modifier = Modifier.focusRing()) { Text("探す") }
         if (scanning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         if (found.isNotEmpty()) {
             Note("${found.size} 本見つかりました")
             found.forEach { f ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(f.rom in checked, { on -> if (on) checked += f.rom else checked -= f.rom }, enabled = f.rom !in known)
+                    Checkbox(f.rom in checked, { on -> if (on) checked += f.rom else checked -= f.rom }, enabled = f.rom !in known, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)))
                     Column {
                         Text(f.title + if (f.rom in known) "（追加済み）" else "", color = XmbText.primary, fontSize = 14.sp)
                         Text(f.rom, color = XmbText.dim, fontSize = 11.sp, maxLines = 1)
@@ -433,7 +462,7 @@ fun ScanPanel(app: AppController, presetTarget: String?, onClose: () -> Unit) {
             Button(enabled = checked.isNotEmpty(), onClick = {
                 app.addGames(found.filter { it.rom in checked }.map { Game(title = it.title, target = target, rom = it.rom) })
                 onClose()
-            }) { Text("${checked.size} 本をライブラリに追加") }
+            }, modifier = Modifier.focusRing()) { Text("${checked.size} 本をライブラリに追加") }
             Note("追加したあと、日本語のタイトル・型番・カバーをインターネットから自動で取得します")
         } else if (!scanning && folder.isNotBlank()) {
             Note("「探す」を押すと、フォルダの中のゲームを一覧にします")
@@ -481,8 +510,8 @@ fun ConflictsPanel(app: AppController, target: String, onClose: () -> Unit) {
         Note("手元とサーバーの両方で変わったファイルです。どちらを残すか選んでください（サーバーの版は履歴に残ります。サーバー版を使うと、手元の版は backups に退避します）")
         if (conflicts.size > 1) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { resolve(conflicts.map { it.rel }, Prefer.LOCAL) }) { Text("すべて手元を残す") }
-                OutlinedButton(onClick = { resolve(conflicts.map { it.rel }, Prefer.REMOTE) }) { Text("すべてサーバー版を使う") }
+                OutlinedButton(onClick = { resolve(conflicts.map { it.rel }, Prefer.LOCAL) }, modifier = Modifier.focusRing()) { Text("すべて手元を残す") }
+                OutlinedButton(onClick = { resolve(conflicts.map { it.rel }, Prefer.REMOTE) }, modifier = Modifier.focusRing()) { Text("すべてサーバー版を使う") }
             }
         }
         conflicts.forEach { cf ->
@@ -502,8 +531,8 @@ fun ConflictsPanel(app: AppController, target: String, onClose: () -> Unit) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { resolve(listOf(cf.rel), Prefer.LOCAL) }, enabled = local.isFile) { Text("手元を残す") }
-                    TextButton(onClick = { resolve(listOf(cf.rel), Prefer.REMOTE) }) { Text("サーバー版を使う") }
+                    TextButton(onClick = { resolve(listOf(cf.rel), Prefer.LOCAL) }, enabled = local.isFile, modifier = Modifier.focusRing()) { Text("手元を残す") }
+                    TextButton(onClick = { resolve(listOf(cf.rel), Prefer.REMOTE) }, modifier = Modifier.focusRing()) { Text("サーバー版を使う") }
                 }
             }
         }
@@ -553,8 +582,8 @@ fun FileHistoryPanel(app: AppController, target: String, rel: String, onClose: (
                 Text("v$v を取得して、手元に反映しますか？", color = XmbText.primary)
                 Note("このファイルだけを取得します。手元も変えていた場合は、上書きせずに競合として知らせます")
                 Row {
-                    TextButton(onClick = { app.syncNow(target, SyncMode.PULL, only = setOf(rel)); askPull = null }) { Text("取得する") }
-                    TextButton(onClick = { askPull = null }) { Text("あとで") }
+                    TextButton(onClick = { app.syncNow(target, SyncMode.PULL, only = setOf(rel)); askPull = null }, modifier = Modifier.focusRing()) { Text("取得する") }
+                    TextButton(onClick = { askPull = null }, modifier = Modifier.focusRing()) { Text("あとで") }
                 }
             }
         }
@@ -577,7 +606,7 @@ fun FileHistoryPanel(app: AppController, target: String, rel: String, onClose: (
                                     .onSuccess { n -> msg = true to "v${v.version} の内容を v$n として最新にしました"; askPull = n; reload++ }
                                     .onFailure { e -> msg = false to Messages.connection(e) }
                             }
-                        }) { Text("この版に戻す") }
+                        }, modifier = Modifier.focusRing()) { Text("この版に戻す") }
                     }
                 }
             }

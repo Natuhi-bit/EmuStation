@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -169,6 +170,10 @@ private val shadowText = TextStyle(shadow = Shadow(Color(0x99000000), androidx.c
  * PS3 の XMB：カテゴリーが横に並び、選んだカテゴリーの項目が縦に並ぶ。
  * 選んでいる項目は、カテゴリーの列のすぐ下に大きく出る。
  */
+/**
+ * XMB の本体。操作は矢印・Enter・Tab（上の画面のキー操作）で行うので、中の項目はフォーカスを受けない
+ * （パネルやダイアログで Tab・コントローラーの上下を押したとき、後ろの XMB に移らないように）
+ */
 @Composable
 fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
@@ -185,7 +190,7 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
             val x = anchorX + catSpacing * (i - catPos) - 70.dp
             Column(
                 Modifier.offset(x, rowY - 40.dp).width(140.dp).alpha(if (selected) 1f else 0.55f)
-                    .clickable(remember { MutableInteractionSource() }, null) { state.selectCategory(i, categories) }
+                    .focusProperties { canFocus = false }.clickable(remember { MutableInteractionSource() }, null) { state.selectCategory(i, categories) }
                     .testTag("cat-${c.id}"),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -217,7 +222,7 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
                 ItemRow(
                     item, selected,
                     Modifier.offset { IntOffset(with(density) { (anchorX - 44.dp).roundToPx() }, with(density) { y.roundToPx() }) }
-                        .clickable(remember { MutableInteractionSource() }, null) {
+                        .focusProperties { canFocus = false }.clickable(remember { MutableInteractionSource() }, null) {
                             if (selected) state.activate(item) else state.selectItem(cat, i)
                         }
                         .testTag("item-${item.id}"),
@@ -250,7 +255,7 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
                         modifier = Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(6.dp))
                             .background(if (on) Color(0x33FFFFFF) else Color.Transparent)
-                            .clickable(enabled = o.enabled) { state.optionsOpen = false; o.action() }
+                            .focusProperties { canFocus = false }.clickable(enabled = o.enabled) { state.optionsOpen = false; o.action() }
                             .padding(horizontal = 12.dp, vertical = 9.dp)
                             .testTag("option-$i"),
                     )

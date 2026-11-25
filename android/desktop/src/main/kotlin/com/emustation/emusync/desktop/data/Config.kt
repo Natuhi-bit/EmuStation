@@ -57,6 +57,10 @@ data class AppConfig(
     val startMinimized: Boolean = true,
     /** 背景の色（PS3 のテーマのように選べる） */
     val themeColor: String = "blue",
+    /** コントローラー（ROG Ally・Xbox のコントローラーなど）で操作する */
+    val gamepad: Boolean = true,
+    /** 決定のボタン（"A"：下のボタン、"B"：右のボタン。PS3 の日本の並びは右で決定） */
+    val confirmButton: String = "A",
     val systems: List<SystemConfig> = emptyList(),
     val games: List<Game> = emptyList(),
 ) {

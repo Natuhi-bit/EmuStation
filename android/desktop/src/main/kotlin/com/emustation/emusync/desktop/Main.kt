@@ -21,10 +21,21 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import com.emustation.emusync.desktop.domain.AppController
+import com.emustation.emusync.desktop.domain.PlayPhase
+import com.emustation.emusync.desktop.platform.AwtKeys
+import com.emustation.emusync.desktop.platform.Gamepad
+import com.emustation.emusync.desktop.platform.PadKeys
+import com.emustation.emusync.desktop.platform.PadRepeater
 import com.emustation.emusync.desktop.platform.SingleInstance
+import com.emustation.emusync.desktop.platform.XInputSource
 import com.emustation.emusync.desktop.ui.EmusyncTheme
 import com.emustation.emusync.desktop.ui.XmbApp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import javax.swing.SwingUtilities
 import org.jetbrains.skia.Image
 
 /**
@@ -86,6 +97,38 @@ fun main(args: Array<String>) {
             },
         ) {
             LaunchedEffect(visible, reopen) { if (visible) window.toFront() }
+            // コントローラー：押されたボタンをキーに直して、このウィンドウに送る（ほかのアプリ（エミュ）が前のときは送らない）
+            LaunchedEffect(Unit) {
+                val source = XInputSource.open() ?: return@LaunchedEffect
+                withContext(Dispatchers.IO) {
+                    val repeater = PadRepeater()
+                    while (isActive) {
+                        val presses = repeater.update(source.poll(), System.currentTimeMillis())
+                        val c = app.config.value
+                        if (presses.isNotEmpty() && c.gamepad) {
+                            SwingUtilities.invokeLater {
+                                if (!window.isActive) return@invokeLater
+                                Gamepad.markPad()
+                                presses.forEach { b -> PadKeys.map(b, Gamepad.mode, c.confirmButton == "B")?.let { AwtKeys.send(window, it) } }
+                            }
+                        }
+                        delay(16)
+                    }
+                }
+            }
+            // ゲームを終えたら（エミュを閉じたら）、このウィンドウを前に出す（コントローラーでそのまま操作できるように）
+            LaunchedEffect(Unit) {
+                var prev: PlayPhase? = null
+                app.play.phase.collect { p ->
+                    if (prev is PlayPhase.Playing && p !is PlayPhase.Playing && visible) {
+                        window.isAlwaysOnTop = true
+                        window.toFront()
+                        window.requestFocus()
+                        window.isAlwaysOnTop = false
+                    }
+                    prev = p
+                }
+            }
             EmusyncTheme { XmbApp(app) }
         }
     }

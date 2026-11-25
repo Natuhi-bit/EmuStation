@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -55,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -72,6 +74,8 @@ import com.emustation.emusync.desktop.domain.PlayPhase
 import com.emustation.emusync.desktop.domain.Presets
 import com.emustation.emusync.desktop.domain.ServerStatus
 import com.emustation.emusync.desktop.domain.SystemStatus
+import com.emustation.emusync.desktop.platform.Gamepad
+import com.emustation.emusync.desktop.platform.PadMode
 import com.emustation.emusync.domain.sync.SyncMode
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -110,6 +114,11 @@ fun buildCategories(
                     XmbOption("まだ取得していないゲームを取得") { app?.fetchInfo() },
                     XmbOption("すべてのゲームを取得し直す") { app?.fetchInfo(again = true) },
                 ),
+            ),
+            XmbItem(
+                "controller", "コントローラー",
+                if (c.gamepad) "使う・決定は ${c.confirmButton} ボタン" else "使わない",
+                Icons.Filled.SportsEsports, onActivate = { open(Panel.Controller) },
             ),
             XmbItem("startup", "起動と常駐", "Windows の起動時に起動・タスクトレイ・定期送信", Icons.Filled.PowerSettingsNew, onActivate = { open(Panel.Startup) }),
             XmbItem("theme", "テーマ", XmbThemes.byName(c.themeColor).label, Icons.Filled.Brush, onActivate = { open(Panel.Theme) }),
@@ -251,25 +260,36 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
     val cats = buildCategories(c, server, systems, app, infoBusy) { panel = it }
     // 列（ハード）が増えたり減ったりしても、選んでいた列を選んだままにする
     state.follow(cats)
+    // コントローラー：パネル・ダイアログでは上下でボタンや入力欄を移る
+    SideEffect { Gamepad.mode = if (panel != null || phase != null) PadMode.Form else PadMode.Xmb }
     val focus = remember { FocusRequester() }
     LaunchedEffect(panel, phase) { if (panel == null && phase == null) runCatching { focus.requestFocus() } }
 
     Box(
         Modifier.fillMaxSize()
             .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown) Gamepad.markKeyboard()
                 when {
-                    phase != null -> false
+                    phase != null -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { overlayBack(app, phase!!); true } else false
                     panel != null -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { panel = null; true } else false
                     else -> state.onKey(e, cats)
                 }
             }
-            .focusRequester(focus).focusable(),
+            .focusRequester(focus)
+            // パネル・ダイアログを開いている間は、後ろの XMB にフォーカスが移らないように
+            .focusProperties { canFocus = panel == null && phase == null }.focusable(),
     ) {
         WaveBackground(XmbThemes.byName(c.themeColor), Modifier.fillMaxSize(), wavePhase)
         Header(now, Modifier.align(Alignment.TopEnd).padding(24.dp), server)
         Xmb(cats, state)
+        val pad by Gamepad.lastInputWasPad.collectAsState()
+        val (ok, back) = if (c.confirmButton == "B") "B" to "A" else "A" to "B"
         KeyHints(
-            listOf("←→↑↓" to "選ぶ", "Enter" to "決定", "Tab" to "オプション", "Esc" to "戻る"),
+            when {
+                !pad -> listOf("←→↑↓" to "選ぶ", "Enter" to "決定", "Tab" to "オプション", "Esc" to "戻る")
+                panel != null || phase != null -> listOf("↑↓" to "選ぶ", ok to "決定", back to "戻る")
+                else -> listOf("✚" to "選ぶ", "LB RB" to "切り替え", ok to "決定", "Y" to "オプション", back to "戻る")
+            },
             Modifier.align(Alignment.BottomEnd).padding(24.dp),
         )
         AnimatedVisibility(
@@ -281,6 +301,7 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
                 Panel.Server -> ServerPanel(app, close)
                 is Panel.System -> SystemPanel(app, p.target, close)
                 Panel.Startup -> StartupPanel(app, close)
+                Panel.Controller -> ControllerPanel(app, close)
                 Panel.Theme -> ThemePanel(app, close)
                 Panel.About -> AboutPanel(app, close)
                 is Panel.EditGame -> EditGamePanel(app, p.gameId, p.target, close)
@@ -315,10 +336,22 @@ private fun Header(now: (() -> Long)?, modifier: Modifier, server: ServerStatus)
     }
 }
 
+/** ダイアログで「戻る」（Esc・コントローラーの B）：やめる・閉じる。競合のときはロックも外す。準備中・プレイ中は何もしない */
+private fun overlayBack(app: AppController, p: PlayPhase) {
+    when (p) {
+        is PlayPhase.Conflicts -> app.abortPlay(p.game)
+        is PlayPhase.Working, is PlayPhase.Playing -> Unit
+        else -> app.play.dismiss()
+    }
+}
+
 /** Steam のように、プレイの進み具合を画面の上に重ねて出す */
 @Composable
 private fun PlayOverlay(app: AppController, p: PlayPhase, openConflicts: (String) -> Unit) {
     val g = p.game ?: return
+    // コントローラー・キーボードですぐ押せるように、最初に選んでおくボタン（危なくない方）
+    val first = remember { FocusRequester() }
+    LaunchedEffect(p::class) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxSize().background(Color(0xB0000000)), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 560.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xF0111824)).padding(28.dp).testTag("play-overlay"),
@@ -346,16 +379,16 @@ private fun PlayOverlay(app: AppController, p: PlayPhase, openConflicts: (String
                     Text("${p.device} がプレイ中です", color = XmbText.warn, fontSize = 17.sp)
                     Text("向こうで終わってから起動してください。奪って起動すると、向こうのセーブと競合するおそれがあります（ロックの期限 ${formatTime((p.expiresAt * 1000).toLong())}）", color = XmbText.secondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { app.play.dismiss(); app.playGame(g, force = true) }) { Text("奪って起動") }
-                        TextButton(onClick = { app.play.dismiss() }) { Text("やめる") }
+                        OutlinedButton(onClick = { app.play.dismiss(); app.playGame(g, force = true) }, modifier = Modifier.focusRing()) { Text("奪って起動") }
+                        TextButton(onClick = { app.play.dismiss() }, modifier = Modifier.focusRequester(first).focusRing()) { Text("やめる") }
                     }
                 }
                 is PlayPhase.Unreachable -> {
                     Text(p.message, color = XmbText.error)
                     Text("同期せずに起動しますか？ 遊び終わったら、つながるときに自動で送ります", color = XmbText.secondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { app.playOffline(g) }) { Text("同期せずに起動") }
-                        TextButton(onClick = { app.play.dismiss() }) { Text("やめる") }
+                        Button(onClick = { app.playOffline(g) }, modifier = Modifier.focusRequester(first).focusRing()) { Text("同期せずに起動") }
+                        TextButton(onClick = { app.play.dismiss() }, modifier = Modifier.focusRing()) { Text("やめる") }
                     }
                 }
                 is PlayPhase.Conflicts -> {
@@ -363,18 +396,18 @@ private fun PlayOverlay(app: AppController, p: PlayPhase, openConflicts: (String
                     Text("手元とサーバーの両方で変わったセーブがあるので、起動を止めました（何も上書きしていません）", color = XmbText.secondary)
                     p.result.conflicts.take(5).forEach { Text("! ${it.rel}", color = XmbText.warn, fontSize = 13.sp) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { app.playIgnoringConflicts(g) }) { Text("無視して起動") }
-                        OutlinedButton(onClick = { app.abortPlay(g); openConflicts(g.target) }) { Text("競合を見る") }
-                        TextButton(onClick = { app.abortPlay(g) }) { Text("やめる") }
+                        OutlinedButton(onClick = { app.playIgnoringConflicts(g) }, modifier = Modifier.focusRing()) { Text("無視して起動") }
+                        OutlinedButton(onClick = { app.abortPlay(g); openConflicts(g.target) }, modifier = Modifier.focusRequester(first).focusRing()) { Text("競合を見る") }
+                        TextButton(onClick = { app.abortPlay(g) }, modifier = Modifier.focusRing()) { Text("やめる") }
                     }
                 }
                 is PlayPhase.Finished -> {
                     Text(p.text, color = if (p.conflicts > 0) XmbText.warn else XmbText.ok)
-                    Button(onClick = { app.play.dismiss() }, modifier = Modifier.testTag("overlay-ok")) { Text("OK") }
+                    Button(onClick = { app.play.dismiss() }, modifier = Modifier.testTag("overlay-ok").focusRequester(first).focusRing()) { Text("OK") }
                 }
                 is PlayPhase.Failed -> {
                     Text(p.message, color = XmbText.error)
-                    Button(onClick = { app.play.dismiss() }) { Text("OK") }
+                    Button(onClick = { app.play.dismiss() }, modifier = Modifier.focusRequester(first).focusRing()) { Text("OK") }
                 }
             }
         }
