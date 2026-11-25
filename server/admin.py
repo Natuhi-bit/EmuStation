@@ -13,16 +13,21 @@ import fnmatch
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 import shutil
+import tempfile
 import time
 import zipfile
 from pathlib import Path
 from typing import Annotated, Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
+from starlette.background import BackgroundTask
+
+import backup as _backup
 from pydantic import BaseModel, Field
 
 STATIC_DIR = Path(__file__).resolve().parent / "static" / "admin"
@@ -77,6 +82,7 @@ class Core:
         self.restore_version = restore_version
         self.register_device = register_device
         self.max_bytes = max_bytes
+        self.backup = _backup.BackupManager(self)
 
     # ---- meta テーブル
     def meta_get(self, key: str) -> str | None:
@@ -509,5 +515,77 @@ def build_router(core: Core) -> APIRouter:
     def cancel(iid: str):
         imports.delete(iid)
         return {"deleted": True}
+
+    # ---- 二次バックアップ
+    bk = core.backup
+
+    def bk_call(f, *a, **kw):
+        try:
+            return f(*a, **kw)
+        except _backup.BackupError as e:
+            raise HTTPException(400, str(e))
+
+    @router.get("/api/backup", dependencies=[admin])
+    def backup_info():
+        st = bk.status()
+        return {
+            "config": bk.public_config(),
+            "dests": [{"name": d.name, "label": d.label, "status": st.get(d.name, {})} for d in bk.dests()],
+            "last_run": st.get("_all", {}).get("last_run"),
+            "running": bk.running or (bk.lock.locked() and "実行中です") or None,
+        }
+
+    @router.put("/api/backup/config", dependencies=[admin])
+    def backup_config(req: dict = Body(...)):
+        bk_call(bk.save_config, req)
+        return backup_info()
+
+    @router.post("/api/backup/test", dependencies=[admin])
+    def backup_test():
+        """設定した置き場所に、書いて・読んで・消せるか"""
+        out = {}
+        for d in bk.dests():
+            try:
+                d.check(core.data_dir) if isinstance(d, _backup.LocalDest) else d.check()
+                out[d.name] = {"ok": True}
+            except Exception as e:  # noqa: BLE001
+                out[d.name] = {"ok": False, "error": str(e) if isinstance(e, _backup.BackupError) else f"{type(e).__name__}: {e}"}
+        if not out:
+            raise HTTPException(400, "置き場所が設定されていません")
+        return out
+
+    @router.post("/api/backup/run", dependencies=[admin])
+    def backup_run(req: dict = Body(default={})):
+        if not bk.dests():
+            raise HTTPException(400, "置き場所が設定されていません")
+        bk_call(bk.run_in_background, req.get("dest"), bool(req.get("force")))
+        return {"started": True}
+
+    @router.get("/api/backup/{dest}/snapshots", dependencies=[admin])
+    def backup_snapshots(dest: str):
+        return {"snapshots": bk_call(lambda: bk.snapshots(bk.dest(dest)))}
+
+    @router.get("/api/backup/{dest}/snapshots/{sid}", dependencies=[admin])
+    def backup_snapshot(dest: str, sid: str):
+        m = bk_call(lambda: bk.manifest(bk.dest(dest), sid))
+        return {"id": m["id"], "created_at": m["created_at"], "files": m["files"]}
+
+    @router.post("/api/backup/{dest}/snapshots/{sid}/restore", dependencies=[admin])
+    def backup_restore(dest: str, sid: str, req: dict = Body(...)):
+        src = bk_call(bk.dest, dest)
+        if req.get("mode") == "all":
+            if req.get("confirm") != sid:
+                raise HTTPException(400, "確認のため、戻す世代の ID を入れてください")
+            return bk_call(bk.restore_all, src, sid)
+        return bk_call(bk.restore_files, src, sid, req.get("paths") or [], req.get("targets") or [])
+
+    @router.get("/api/backup/download", dependencies=[admin])
+    def backup_download():
+        """今の状態を zip でダウンロード（置き場所と同じ形。python3 app.py restore-backup --zip で戻せる）"""
+        fd, tmp = tempfile.mkstemp(suffix=".zip", dir=core.data_dir)
+        os.close(fd)
+        sid = bk.build_zip(Path(tmp))
+        return FileResponse(tmp, media_type="application/zip", filename=f"emusync-backup-{sid}.zip",
+                            background=BackgroundTask(lambda: Path(tmp).unlink(missing_ok=True)))
 
     return router

@@ -15,6 +15,9 @@ sys.path.insert(0, str(SERVER_DIR))
 def core(tmp_path, monkeypatch):
     monkeypatch.setenv("EMUSYNC_DATA", str(tmp_path / "data"))
     monkeypatch.setenv("EMUSYNC_KEEP_VERSIONS", "3")
+    monkeypatch.setenv("EMUSYNC_NO_SCHEDULER", "1")
+    # テストでは別のディスクを用意できないので、同じディスクへのバックアップを許す
+    monkeypatch.setenv("EMUSYNC_BACKUP_ALLOW_SAME_DISK", "1")
     for name in ("app", "admin"):
         sys.modules.pop(name, None)
     mod = importlib.import_module("app")

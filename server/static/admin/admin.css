@@ -61,10 +61,16 @@ code { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-
 .token { background: var(--warn-bg); padding: 12px; border-radius: 8px; margin-top: 12px; }
 .token code { flex: 1 1 300px; font-size: 14px; }
 progress { width: 100%; margin-top: 10px; }
+h3 { font-size: 14px; margin: 16px 0 8px; }
+a.button { display: inline-block; text-decoration: none; border-radius: 8px; padding: 8px 14px; }
+a.button.ghost { color: var(--accent); border: 1px solid var(--line); }
+.dest { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.dest b { margin-right: 8px; }
+.danger-zone { border: 1px solid var(--error); border-radius: 8px; padding: 12px; margin-top: 16px; }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg);
   padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px); }
 @media (max-width: 640px) {
-  /* 狭い画面では、タブを詰めて 5 つとも収める */
+  /* 狭い画面では、タブを詰めて 6 つとも収める */
   main { padding: 12px; }
   .tabs { gap: 0; }
   .tabs button { flex: 1 0 auto; padding: 8px 6px; }

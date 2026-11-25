@@ -410,3 +410,144 @@ async function releaseLock(x) {
 }
 
 boot().catch((e) => { document.body.prepend(el("p", { class: "error" }, "読み込めませんでした: " + e.message)); });
+
+// ---------------------------------------------------------------- バックアップ
+let bkSnapshot = null;
+let bkPoll = null;
+
+for (let h = 0; h < 24; h++) $("#bk-hour").append(el("option", { value: h }, `${h}:00`));
+
+async function loadBackup() {
+  const b = await api("backup");
+  const c = b.config;
+  $("#bk-nc-url").value = c.nextcloud.url;
+  $("#bk-nc-user").value = c.nextcloud.user;
+  $("#bk-nc-pass").value = "";
+  $("#bk-nc-pass").placeholder = c.nextcloud.has_password ? "設定済み（変えるときだけ入力）" : "";
+  $("#bk-nc-verify").checked = c.nextcloud.verify_tls;
+  $("#bk-local").value = c.local_dir;
+  $("#bk-auto").checked = c.auto;
+  $("#bk-hour").value = c.hour;
+  renderBackupStatus(b);
+  const src = $("#bk-source");
+  const cur = src.value;
+  src.replaceChildren(...b.dests.map((d) => el("option", { value: d.name }, d.label)));
+  if (b.dests.some((d) => d.name === cur)) src.value = cur;
+  else {
+    // 最初は、最後にうまくいった置き場所（つながらない置き場所で一覧が空になるのを避ける）
+    const best = [...b.dests].sort((x, y) => ((y.status || {}).last_ok || 0) - ((x.status || {}).last_ok || 0))[0];
+    if (best) src.value = best.name;
+  }
+  if (b.dests.length) await loadSnapshots().catch((e) => { toast(e.message); $("#bk-snapshots").replaceChildren(); });
+  else { $("#bk-snapshots").replaceChildren(); $("#bk-snapshots-empty").hidden = false; $("#bk-detail").hidden = true; }
+}
+loaders.backup = loadBackup;
+
+function renderBackupStatus(b) {
+  const box = $("#bk-dests");
+  box.replaceChildren();
+  if (!b.dests.length) box.append(el("p", { class: "warn" }, "置き場所がまだ設定されていません。下の「置き場所と時刻」で Nextcloud か別のディスクを設定してください。"));
+  for (const d of b.dests) {
+    const s = d.status || {};
+    const lines = [el("b", {}, d.label)];
+    if (s.last_ok) lines.push(el("span", { class: "ok" }, `最後の成功 ${fmtTime(s.last_ok)}`));
+    else lines.push(el("span", { class: "muted" }, "まだバックアップしていません"));
+    const div = el("div", { class: "dest" }, ...lines);
+    if (s.last_error && (!s.last_ok || s.last_error_at > s.last_ok)) div.append(el("p", { class: "error" }, `失敗：${s.last_error}（${fmtTime(s.last_error_at)}）`));
+    box.append(div);
+  }
+  $("#bk-running").hidden = !b.running;
+  $("#bk-running").textContent = b.running ? `${b.running}…（終わるまで、ほかの操作はできません）` : "";
+  $("#bk-run").disabled = !!b.running || !b.dests.length;
+  clearTimeout(bkPoll);
+  if (b.running) bkPoll = setTimeout(() => api("backup").then((x) => { renderBackupStatus(x); if (!x.running) loadSnapshots().catch(() => {}); }).catch(() => {}), 3000);
+}
+
+function backupConfigBody() {
+  return {
+    auto: $("#bk-auto").checked,
+    hour: Number($("#bk-hour").value),
+    local_dir: $("#bk-local").value,
+    nextcloud: { url: $("#bk-nc-url").value, user: $("#bk-nc-user").value, password: $("#bk-nc-pass").value, verify_tls: $("#bk-nc-verify").checked },
+  };
+}
+
+function bkMessage(text, ok) {
+  const p = $("#bk-config-msg");
+  p.textContent = text;
+  p.className = ok ? "ok" : "error";
+  p.hidden = !text;
+}
+
+$("#bk-save").addEventListener("click", async () => {
+  try {
+    await api("backup/config", { method: "PUT", body: backupConfigBody() });
+    bkMessage("保存しました", true);
+    await loadBackup();
+  } catch (e) { bkMessage(e.message, false); }
+});
+
+$("#bk-test").addEventListener("click", async () => {
+  try {
+    await api("backup/config", { method: "PUT", body: backupConfigBody() });
+    const r = await api("backup/test", { method: "POST" });
+    const msgs = Object.entries(r).map(([k, v]) => `${k === "nextcloud" ? "Nextcloud" : "別のディスク"}：${v.ok ? "OK" : v.error}`);
+    bkMessage(msgs.join("　"), Object.values(r).every((v) => v.ok));
+    await loadBackup();
+  } catch (e) { bkMessage(e.message, false); }
+});
+
+$("#bk-run").addEventListener("click", async () => {
+  try {
+    await api("backup/run", { method: "POST", body: {} });
+    toast("バックアップを始めました");
+    renderBackupStatus(await api("backup"));
+  } catch (e) { toast(e.message); }
+});
+
+$("#bk-source").addEventListener("change", () => loadSnapshots().catch((e) => toast(e.message)));
+
+async function loadSnapshots() {
+  const dest = $("#bk-source").value;
+  if (!dest) return;
+  const r = await api(`backup/${dest}/snapshots`);
+  const tb = $("#bk-snapshots");
+  tb.replaceChildren(...r.snapshots.map((s) => el("tr", { class: "click", onclick: () => showSnapshot(dest, s.id) },
+    el("td", {}, fmtTime(s.created_at)), el("td", { class: "num" }, String(s.files)), el("td", { class: "num" }, fmtSize(s.total_bytes)),
+    el("td", {}, s.targets.join("・")))));
+  $("#bk-snapshots-empty").hidden = r.snapshots.length > 0;
+  $("#bk-detail").hidden = true;
+}
+
+async function showSnapshot(dest, id) {
+  const m = await api(`backup/${dest}/snapshots/${id}`);
+  bkSnapshot = { dest, id };
+  $("#bk-detail").hidden = false;
+  $("#bk-detail-title").textContent = `${fmtTime(m.created_at)} の世代（${m.files.length} ファイル）`;
+  const targets = [...new Set(m.files.map((f) => f.path.split("/")[0]))];
+  $("#bk-targets").replaceChildren(...targets.map((t) => el("button", { class: "ghost", onclick: () => restoreBackup({ targets: [t] }, `${t} のすべてのファイル`) }, `${t} を戻す`)));
+  $("#bk-files").replaceChildren(...m.files.map((f) => el("tr", {},
+    el("td", {}, f.path), el("td", { class: "num" }, `v${f.version}`), el("td", { class: "num" }, fmtSize(f.size)),
+    el("td", {}, fmtTime(f.updated_at)),
+    el("td", {}, el("button", { class: "ghost", onclick: () => restoreBackup({ paths: [f.path] }, f.path) }, "戻す")))));
+}
+
+async function restoreBackup(body, what) {
+  if (!bkSnapshot) return;
+  if (!confirm(`${what} を、この世代の中身に戻します（新しい版として置きます。今の版は履歴に残ります）。よろしいですか？`)) return;
+  try {
+    const r = await api(`backup/${bkSnapshot.dest}/snapshots/${bkSnapshot.id}/restore`, { method: "POST", body: { mode: "files", ...body } });
+    toast(`戻しました：${r.restored} ファイル（同じ内容で変えなかったもの ${r.unchanged}）`);
+  } catch (e) { toast(e.message); }
+}
+
+$("#bk-restore-all").addEventListener("click", async () => {
+  if (!bkSnapshot) return;
+  const typed = prompt(`サーバー全体を ${bkSnapshot.id} の状態に戻します。この操作は、すべてのファイル・履歴・端末を置き換えます。\n確認のため、世代の ID「${bkSnapshot.id}」を入力してください。`);
+  if (typed === null) return;
+  try {
+    const r = await api(`backup/${bkSnapshot.dest}/snapshots/${bkSnapshot.id}/restore`, { method: "POST", body: { mode: "all", confirm: typed.trim() } });
+    alert(`サーバー全体を戻しました（${r.files} ファイル。前の DB は ${r.saved_db} に残しました）`);
+    await loadBackup();
+  } catch (e) { toast(e.message); }
+});

@@ -82,6 +82,36 @@ python -m pytest server/tests
 | Windows 版の画面 | `MONKEY_SEED=7 ./gradlew :desktop:test --tests '*MonkeyTest'`（android/ で） |
 | Android アプリ全体（本物のサーバーを立てる） | `MONKEY_SEED=7 MONKEY_STEPS=2000 android/scripts/server-integration.sh` |
 
+### 二次バックアップ
+管理画面の「バックアップ」で、サーバーのセーブデータ（全端末のファイル・履歴・端末の登録）を別の場所に写す。
+毎日決まった時刻に自動で行い、1 日ごと 7 個・1 週ごと 4 個・1 か月ごと 6 個の世代を残す（変わっていない日は作らない）。
+中身が同じファイルは 1 回しか送らないので、2 回目からは変わった分だけ。
+
+| 置き場所 | 設定 |
+|---|---|
+| Nextcloud | WebDAV の URL（`https://<Nextcloud>/remote.php/dav/files/<ユーザー名>/emusync-backup`）、ユーザー名、アプリパスワード（Nextcloud の「個人設定 → セキュリティ」で作る） |
+| サーバーの別のディスク | フォルダ（例 `/mnt/backup/emusync-backup`）。サーバーのデータと同じディスクは選べない（つながっていない USB の HDD に気づかず同じディスクへ書くのを防ぐ） |
+| 手元にダウンロード | 「手元にダウンロード（zip）」で、今の状態を zip で保存 |
+
+別のディスクは、emusync のユーザーが書けるようにしておく：
+```bash
+sudo mkdir -p /mnt/backup/emusync-backup && sudo chown emusync: /mnt/backup/emusync-backup
+```
+
+**戻し方**
+- 一部：「世代と復元」で世代を選び、ハード（「ps2 を戻す」）か 1 ファイル（「戻す」）を選ぶ。その時点の中身が新しい版になり、各端末は次の同期で取得する
+- 全体：「この世代でサーバー全体を戻す」（世代の ID を打ち込んで確認）。ファイル・履歴・端末がその時点に戻る。
+  今の DB は `/var/lib/emusync/pre-restore-<日時>.db` に残し、管理画面のパスワードとバックアップの設定は今のものを残す
+- サーバーを入れ直したとき（管理画面に入る前でも）はコマンドで戻せる：
+```bash
+cd /opt/emusync/server
+sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.py restore-backup --dir /mnt/backup/emusync-backup --list
+sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.py restore-backup --dir /mnt/backup/emusync-backup
+```
+  Nextcloud からは `--webdav <URL> --user <ユーザー名>`（パスワードは聞かれる）、ダウンロードした zip からは `--zip <ファイル>`。
+  `--snapshot <ID>` で世代を選べる（省くと最新）。戻したあとは `sudo systemctl restart emusync`
+- 今すぐバックアップ：管理画面の「今すぐバックアップ」、またはコマンド `app.py backup`
+
 ### 調整用の環境変数（emusync.service の Environment=）
 | 変数 | 既定値 | 内容 |
 |---|---|---|

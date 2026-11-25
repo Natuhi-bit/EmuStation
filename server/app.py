@@ -129,7 +129,11 @@ def current_device(authorization: str = Header(default="")) -> str:
 @asynccontextmanager
 async def lifespan(_app):
     init_storage()
+    # 毎日の二次バックアップ（設定した時刻を過ぎたら 1 日 1 回）。テストでは EMUSYNC_NO_SCHEDULER=1 で止める
+    if os.environ.get("EMUSYNC_NO_SCHEDULER") != "1":
+        ADMIN.backup.start_scheduler()
     yield
+    ADMIN.backup.stop_scheduler()
 
 
 app = FastAPI(title="emusync", lifespan=lifespan)
@@ -406,8 +410,60 @@ def _cli() -> None:
             sys.exit("一致しません")
         ADMIN.set_admin_password(pw)
         print("設定しました。ブラウザで https://<サーバー>/emusync/admin/ を開いてください")
+    elif len(sys.argv) >= 2 and sys.argv[1] == "backup":
+        # 今すぐバックアップ（--force：変わっていなくても世代を作る）
+        for name, r in ADMIN.backup.run(force="--force" in sys.argv).items():
+            print(name, r)
+    elif len(sys.argv) >= 2 and sys.argv[1] == "restore-backup":
+        _cli_restore(sys.argv[2:])
     else:
-        print("使い方: python3 app.py add-device <名前> | remove-device <名前> | list-devices | set-admin-password")
+        print("使い方: python3 app.py add-device <名前> | remove-device <名前> | list-devices | set-admin-password\n"
+              "                     | backup [--force] | restore-backup（--help で説明）")
+
+
+def _cli_restore(args: list[str]) -> None:
+    """
+    サーバーを失ったときに、バックアップから全体を戻す（新しく入れたサーバーでも使える）。
+      --dir <フォルダ>                      別のディスク（例 /mnt/backup/emusync-backup）
+      --webdav <URL> --user <ユーザー>       Nextcloud（パスワードは聞く）。--insecure で証明書を確かめない
+      --zip <ファイル>                       管理画面でダウンロードした zip
+      --list                                世代の一覧を出すだけ
+      --snapshot <ID>                       戻す世代（省くと最新）
+    """
+    import argparse
+    import backup as bk
+    p = argparse.ArgumentParser(prog="app.py restore-backup", description=_cli_restore.__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--dir")
+    g.add_argument("--webdav")
+    g.add_argument("--zip")
+    p.add_argument("--user")
+    p.add_argument("--insecure", action="store_true")
+    p.add_argument("--snapshot")
+    p.add_argument("--list", action="store_true")
+    a = p.parse_args(args)
+    if a.dir:
+        src = bk.LocalDest(a.dir)
+    elif a.zip:
+        src = bk.ZipSource(a.zip)
+    else:
+        import getpass
+        if not a.user:
+            sys.exit("--user が必要です")
+        src = bk.WebDavDest(a.webdav, a.user, getpass.getpass("Nextcloud のアプリパスワード: "), not a.insecure)
+    snaps = ADMIN.backup.snapshots(src)
+    if not snaps:
+        sys.exit("世代が見つかりません")
+    if a.list:
+        for s in snaps:
+            print(s["id"], time.strftime("%Y-%m-%d %H:%M", time.localtime(s["created_at"])), f'{s["files"]} ファイル', ",".join(s["targets"]))
+        return
+    sid = a.snapshot or snaps[0]["id"]
+    print(f"{sid} の状態に、サーバー全体を戻します（今の DB は pre-restore-*.db に残します）")
+    if input("よろしいですか？ [y/N] ").strip().lower() != "y":
+        sys.exit("やめました")
+    print(ADMIN.backup.restore_all(src, sid))
 
 
 # ---------------------------------------------------------------- 管理画面（/admin/）

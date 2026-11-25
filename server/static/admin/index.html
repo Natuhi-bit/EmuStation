@@ -35,6 +35,7 @@
       <button data-tab="import">インポート</button>
       <button data-tab="devices">端末</button>
       <button data-tab="locks">ロック</button>
+      <button data-tab="backup">バックアップ</button>
     </nav>
 
     <section data-panel="overview">
@@ -137,6 +138,66 @@
         <table class="list"><thead><tr><th>ターゲット</th><th>端末</th><th>期限</th><th></th></tr></thead>
           <tbody id="locks"></tbody></table>
         <p id="locks-empty" class="muted" hidden>プレイ中のロックはありません。</p>
+      </div>
+    </section>
+
+    <section data-panel="backup" hidden>
+      <div class="card">
+        <h2>バックアップの状態</h2>
+        <p class="muted">サーバーのセーブデータ（全端末のファイルと履歴）を、毎日 別の場所に写します。
+          世代は 1 日ごと 7 個・1 週ごと 4 個・1 か月ごと 6 個を残します（変わっていない日は作りません）。</p>
+        <div id="bk-dests"></div>
+        <p id="bk-running" class="warn" hidden></p>
+        <div class="row">
+          <button id="bk-run">今すぐバックアップ</button>
+          <a id="bk-download" class="button ghost" href="api/backup/download">手元にダウンロード（zip）</a>
+        </div>
+        <p class="muted">ダウンロードした zip からは、サーバーで <code>python3 app.py restore-backup --zip ファイル</code> で全体を戻せます。</p>
+      </div>
+
+      <div class="card">
+        <h2>置き場所と時刻</h2>
+        <h3>Nextcloud</h3>
+        <label>WebDAV の URL <input id="bk-nc-url" placeholder="https://cloud.example.com/remote.php/dav/files/ユーザー名/emusync-backup"></label>
+        <div class="row">
+          <label class="grow">ユーザー名 <input id="bk-nc-user" autocomplete="off"></label>
+          <label class="grow">アプリパスワード <input id="bk-nc-pass" type="password" autocomplete="new-password"></label>
+        </div>
+        <label class="check"><input id="bk-nc-verify" type="checkbox" checked> 証明書を確かめる（自己署名の証明書でつながらないときだけ外す）</label>
+        <p class="muted">アプリパスワードは Nextcloud の「個人設定 → セキュリティ → 新しいアプリパスワードを作成」で作れます。</p>
+        <h3>サーバーの別のディスク</h3>
+        <label>フォルダ <input id="bk-local" placeholder="/mnt/backup/emusync-backup（USB の HDD・マウントした NAS など）"></label>
+        <p class="muted">サーバーのデータと同じディスクには置けません（ディスクが壊れると一緒に失われるため）。emusync のユーザーが書き込めるようにしてください。</p>
+        <h3>自動のバックアップ</h3>
+        <div class="row">
+          <label class="check"><input id="bk-auto" type="checkbox" checked> 毎日バックアップする</label>
+          <label>時刻 <select id="bk-hour"></select></label>
+        </div>
+        <div class="row">
+          <button id="bk-save">保存</button>
+          <button id="bk-test" class="ghost">書き込めるか確かめる</button>
+        </div>
+        <p id="bk-config-msg" hidden></p>
+      </div>
+
+      <div class="card">
+        <h2>世代と復元</h2>
+        <label>置き場所 <select id="bk-source"></select></label>
+        <table class="list"><thead><tr><th>日時</th><th class="num">ファイル</th><th class="num">サイズ</th><th>ハード</th></tr></thead>
+          <tbody id="bk-snapshots"></tbody></table>
+        <p id="bk-snapshots-empty" class="muted" hidden>まだ世代がありません。</p>
+        <div id="bk-detail" hidden>
+          <h3 id="bk-detail-title"></h3>
+          <p class="muted">ハードやファイルを選んで戻すと、その時点の中身が「新しい版」になります（各端末は次の同期で取得します。今の版は履歴に残ります）。</p>
+          <div id="bk-targets" class="row"></div>
+          <table class="list files-table"><thead><tr><th>パス</th><th class="num">版</th><th class="num">サイズ</th><th>更新</th><th></th></tr></thead>
+            <tbody id="bk-files"></tbody></table>
+          <div class="danger-zone">
+            <p><strong>サーバー全体を戻す</strong>：サーバーのデータを失ったときに使います。すべてのファイル・履歴・端末がこの時点に戻ります
+              （今の DB は pre-restore-*.db としてサーバーに残します。管理画面のパスワードとバックアップの設定は今のままです）。</p>
+            <button id="bk-restore-all" class="danger">この世代でサーバー全体を戻す</button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
