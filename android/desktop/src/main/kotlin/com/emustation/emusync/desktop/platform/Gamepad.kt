@@ -60,7 +60,7 @@ data class PadState(val pressed: Set<PadButton>, val style: PadStyle? = null) {
  * 押したときに 1 回。上下左右（とLB・RB）は押し続けるとくり返す（キーボードのキーリピートのように）。
  * [now] はミリ秒
  */
-class PadRepeater(private val initialDelayMs: Long = 380, private val repeatMs: Long = 110) {
+class PadRepeater(private val initialDelayMs: Long = 300, private val repeatMs: Long = 80) {
     private val repeats = setOf(PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right, PadButton.LB, PadButton.RB)
     private var prev = PadState.NONE
     private val nextRepeat = HashMap<PadButton, Long>()

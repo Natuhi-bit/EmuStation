@@ -1,6 +1,16 @@
 package com.emustation.emusync.desktop.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.runtime.LaunchedEffect
+import com.emustation.emusync.desktop.platform.Sfx
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -93,9 +103,21 @@ class XmbState(initialCategory: Int = 1) {
         private set
     private var categoryId: String? = null
 
+    /** 操作音（PS3 のように、動かす・決定・戻る・オプションで鳴らす）。XmbApp が設定する */
+    var onSound: (Sfx) -> Unit = {}
+
+    /** 前に選んでいた列から、どちら向きに動いたか（-1：左へ、1：右へ。項目の列を横から入れる向き） */
+    var lastMove by mutableIntStateOf(0)
+        private set
+
     /** 列を選ぶ（キー・クリック） */
     fun selectCategory(i: Int, cats: List<XmbCategory>) {
-        category = i.coerceIn(0, (cats.size - 1).coerceAtLeast(0))
+        val n = i.coerceIn(0, (cats.size - 1).coerceAtLeast(0))
+        if (n != category) {
+            lastMove = if (n > category) 1 else -1
+            onSound(Sfx.Cursor)
+        }
+        category = n
         categoryId = cats.getOrNull(category)?.id
     }
 
@@ -113,7 +135,9 @@ class XmbState(initialCategory: Int = 1) {
     fun itemOf(c: XmbCategory) = (itemIndex[c.id] ?: 0).coerceIn(0, (c.items.size - 1).coerceAtLeast(0))
 
     fun selectItem(c: XmbCategory, i: Int) {
-        itemIndex[c.id] = i.coerceIn(0, (c.items.size - 1).coerceAtLeast(0))
+        val n = i.coerceIn(0, (c.items.size - 1).coerceAtLeast(0))
+        if (n != itemOf(c)) onSound(Sfx.Cursor)
+        itemIndex[c.id] = n
     }
 
     fun selectedItem(cats: List<XmbCategory>): XmbItem? = cats.getOrNull(category)?.let { it.items.getOrNull(itemOf(it)) }
@@ -125,14 +149,20 @@ class XmbState(initialCategory: Int = 1) {
         val item = selectedItem(cats)
         if (optionsOpen) {
             val opts = item?.options.orEmpty()
+            fun moveOption(to: Int) {
+                val n = to.coerceIn(0, (opts.size - 1).coerceAtLeast(0))
+                if (n != optionIndex) onSound(Sfx.Cursor)
+                optionIndex = n
+            }
             when (e.key) {
-                Key.DirectionUp -> optionIndex = (optionIndex - 1).coerceAtLeast(0)
-                Key.DirectionDown -> optionIndex = (optionIndex + 1).coerceAtMost((opts.size - 1).coerceAtLeast(0))
+                Key.DirectionUp -> moveOption(optionIndex - 1)
+                Key.DirectionDown -> moveOption(optionIndex + 1)
                 Key.Enter, Key.NumPadEnter, Key.Spacebar -> opts.getOrNull(optionIndex)?.takeIf { it.enabled }?.let {
+                    onSound(Sfx.Decide)
                     optionsOpen = false
                     it.action()
                 }
-                Key.Escape, Key.Backspace, Key.Tab, Key.DirectionLeft -> optionsOpen = false
+                Key.Escape, Key.Backspace, Key.Tab, Key.DirectionLeft -> { onSound(Sfx.Back); optionsOpen = false }
                 else -> return false
             }
             return true
@@ -152,19 +182,26 @@ class XmbState(initialCategory: Int = 1) {
     fun activate(item: XmbItem?) {
         when {
             item == null -> Unit
-            item.onActivate != null -> item.onActivate.invoke()
+            item.onActivate != null -> { onSound(Sfx.Decide); item.onActivate.invoke() }
             item.options.isNotEmpty() -> openOptions(item)
         }
     }
 
     fun openOptions(item: XmbItem?) {
         if (item?.options.isNullOrEmpty()) return
+        onSound(Sfx.Options)
         optionIndex = 0
         optionsOpen = true
     }
 }
 
 private val shadowText = TextStyle(shadow = Shadow(Color(0x99000000), androidx.compose.ui.geometry.Offset(0f, 2f), 6f))
+
+/** 選んでいる項目の文字は、PS3 のように白くにじませる */
+private val glowText = TextStyle(shadow = Shadow(Color(0xAAFFFFFF), androidx.compose.ui.geometry.Offset(0f, 0f), 14f))
+
+/** XMB の動き：速く動き出して、やわらかく止まる */
+private val XmbEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 /**
  * PS3 の XMB：カテゴリーが横に並び、選んだカテゴリーの項目が縦に並ぶ。
@@ -175,14 +212,15 @@ private val shadowText = TextStyle(shadow = Shadow(Color(0x99000000), androidx.c
  * （パネルやダイアログで Tab・コントローラーの上下を押したとき、後ろの XMB に移らないように）
  */
 @Composable
-fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Modifier) {
+fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Modifier, animated: Boolean = true) {
     val density = LocalDensity.current
     BoxWithConstraints(modifier.fillMaxSize()) {
         val anchorX = maxWidth * 0.24f
         val height = maxHeight
         val rowY = maxHeight * 0.20f
         val catSpacing = 150.dp
-        val catPos by animateFloatAsState(state.category.toFloat(), tween(220), label = "cat")
+        // PS3 のように、すっと動いてやわらかく止まる
+        val catPos by animateFloatAsState(state.category.toFloat(), tween(260, easing = XmbEasing), label = "cat")
 
         // ---- カテゴリーの列
         categories.forEachIndexed { i, c ->
@@ -194,7 +232,8 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
                     .testTag("cat-${c.id}"),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(c.icon, c.label, tint = XmbText.primary, modifier = Modifier.size(if (selected) 56.dp else 44.dp))
+                val iconSize by animateDpAsState(if (selected) 60.dp else 44.dp, tween(220, easing = XmbEasing), label = "catIcon")
+                Icon(c.icon, c.label, tint = XmbText.primary, modifier = Modifier.size(iconSize))
                 if (selected) {
                     Spacer(Modifier.size(6.dp))
                     Text(c.label, color = XmbText.primary, fontSize = 15.sp, style = shadowText, maxLines = 1)
@@ -205,7 +244,11 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
         // ---- 項目の列（選んでいるカテゴリーだけ）
         val cat = categories.getOrNull(state.category) ?: return@BoxWithConstraints
         val sel = state.itemOf(cat)
-        val itemPos by animateFloatAsState(sel.toFloat(), tween(180), label = "item")
+        val itemPos by animateFloatAsState(sel.toFloat(), tween(200, easing = XmbEasing), label = "item")
+        // 列を切り替えたら、項目の列を動いた向きから、ふわっと入れる
+        val enter = remember(cat.id) { Animatable(if (state.lastMove == 0) 1f else 0f) }
+        LaunchedEffect(cat.id) { enter.animateTo(1f, tween(240, easing = XmbEasing)) }
+        val shift = 36.dp * (1f - enter.value) * state.lastMove
         val step = 72.dp
         val belowStart = rowY + 70.dp
         val aboveStart = rowY - 110.dp
@@ -213,14 +256,14 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
             if (d < -20f) state.selectItem(cat, state.itemOf(cat) + 1) else if (d > 20f) state.selectItem(cat, state.itemOf(cat) - 1)
             d
         }
-        Box(Modifier.fillMaxSize().scrollable(scroll, Orientation.Vertical)) {
+        Box(Modifier.fillMaxSize().scrollable(scroll, Orientation.Vertical).offset(x = shift).alpha(enter.value)) {
             cat.items.forEachIndexed { i, item ->
                 val rel = i - itemPos
                 val y = if (rel >= -0.5f) belowStart + step * rel + (if (i > sel) 36.dp else 0.dp) else aboveStart + step * (rel + 1)
                 if (y < -step || y > height + step) return@forEachIndexed
                 val selected = i == sel
                 ItemRow(
-                    item, selected,
+                    item, selected, animated,
                     Modifier.offset { IntOffset(with(density) { (anchorX - 44.dp).roundToPx() }, with(density) { y.roundToPx() }) }
                         .focusProperties { canFocus = false }.clickable(remember { MutableInteractionSource() }, null) {
                             if (selected) state.activate(item) else state.selectItem(cat, i)
@@ -266,10 +309,19 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
 }
 
 @Composable
-private fun ItemRow(item: XmbItem, selected: Boolean, modifier: Modifier) {
-    val iconSize = if (selected) 88.dp else 60.dp
-    Row(modifier.alpha(if (selected) 1f else 0.62f), verticalAlignment = Alignment.CenterVertically) {
+private fun ItemRow(item: XmbItem, selected: Boolean, animated: Boolean, modifier: Modifier) {
+    val iconSize by animateDpAsState(if (selected) 88.dp else 60.dp, tween(200, easing = XmbEasing), label = "itemIcon")
+    val rowAlpha by animateFloatAsState(if (selected) 1f else 0.62f, tween(200), label = "itemAlpha")
+    Row(modifier.alpha(rowAlpha), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+            // 選んでいる項目の後ろに、PS3 のような ゆっくり明滅する光（テストの画像では止める）
+            if (selected) {
+                val glow = if (animated) {
+                    val t = rememberInfiniteTransition(label = "glow")
+                    t.animateFloat(0.18f, 0.42f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Reverse), label = "glowA").value
+                } else 0.3f
+                Box(Modifier.size(110.dp).background(Brush.radialGradient(listOf(Color.White.copy(alpha = glow), Color.Transparent))))
+            }
             when {
                 item.image != null -> {
                     // カバーは切り取らずに全体を見せる（縦長のパッケージ・横長のアイコンとも、枠の中に収める）
@@ -289,7 +341,7 @@ private fun ItemRow(item: XmbItem, selected: Boolean, modifier: Modifier) {
         Column(Modifier.widthIn(max = 640.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    item.title, color = XmbText.primary, style = shadowText,
+                    item.title, color = XmbText.primary, style = if (selected) glowText else shadowText,
                     fontSize = if (selected) 22.sp else 17.sp, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 520.dp),
                 )

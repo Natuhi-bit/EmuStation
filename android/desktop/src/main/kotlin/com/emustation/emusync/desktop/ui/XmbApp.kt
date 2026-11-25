@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.StayCurrentLandscape
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +78,8 @@ import com.emustation.emusync.desktop.domain.SystemStatus
 import com.emustation.emusync.desktop.platform.Gamepad
 import com.emustation.emusync.desktop.platform.PadButton
 import com.emustation.emusync.desktop.platform.PadMode
+import com.emustation.emusync.desktop.platform.Sfx
+import com.emustation.emusync.desktop.platform.Sounds
 import com.emustation.emusync.domain.sync.SyncMode
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -120,6 +123,11 @@ fun buildCategories(
                 "controller", "コントローラー",
                 if (c.gamepad) "使う・決定は ${c.confirmButton} ボタン" else "使わない",
                 Icons.Filled.SportsEsports, onActivate = { open(Panel.Controller) },
+            ),
+            XmbItem(
+                "sounds", "操作音",
+                if (!c.sounds) "鳴らさない" else "音の大きさ ${c.soundVolume}",
+                Icons.Filled.VolumeUp, onActivate = { open(Panel.Sounds) },
             ),
             XmbItem("startup", "起動と常駐", "Windows の起動時に起動・タスクトレイ・定期送信", Icons.Filled.PowerSettingsNew, onActivate = { open(Panel.Startup) }),
             XmbItem("theme", "テーマ", XmbThemes.byName(c.themeColor).label, Icons.Filled.Brush, onActivate = { open(Panel.Theme) }),
@@ -249,13 +257,15 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
     val systems by app.systems.collectAsState()
     val phase by app.play.phase.collectAsState()
     var panel by remember { mutableStateOf<Panel?>(null) }
+    // 操作音の設定
+    LaunchedEffect(c.sounds, c.soundVolume) { Sounds.enabled = c.sounds; Sounds.volume = c.soundVolume }
     val state = remember {
         // 最初は、最後に遊んだゲームのハードの列（なければ設定の次の列）
         val last = app.config.value.games.maxByOrNull { it.lastPlayedAt ?: 0L }?.takeIf { it.lastPlayedAt != null }
         val first = initialCategory ?: last?.let { g ->
             buildCategories(app.config.value, ServerStatus.Checking, emptyMap(), null) {}.indexOfFirst { it.id == "hw-${g.target}" }
         }?.takeIf { it >= 0 } ?: 1
-        XmbState(first)
+        XmbState(first).apply { onSound = Sounds::play }
     }
     val infoBusy by app.infoBusy.collectAsState()
     val cats = buildCategories(c, server, systems, app, infoBusy) { panel = it }
@@ -271,8 +281,8 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown) Gamepad.markKeyboard()
                 when {
-                    phase != null -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { overlayBack(app, phase!!); true } else false
-                    panel != null -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { panel = null; true } else false
+                    phase != null -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { Sounds.play(Sfx.Back); overlayBack(app, phase!!); true } else false
+                    panel != null -> if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { Sounds.play(Sfx.Back); panel = null; true } else false
                     else -> state.onKey(e, cats)
                 }
             }
@@ -282,7 +292,7 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
     ) {
         WaveBackground(XmbThemes.byName(c.themeColor), Modifier.fillMaxSize(), wavePhase)
         Header(now, Modifier.align(Alignment.TopEnd).padding(24.dp), server)
-        Xmb(cats, state)
+        Xmb(cats, state, animated = wavePhase == null)
         val pad by Gamepad.lastInputWasPad.collectAsState()
         val style by Gamepad.style.collectAsState()
         // 決定・戻るのボタン（位置）。記号はコントローラーの種類で（PlayStation なら × ○）
@@ -310,6 +320,7 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
                 is Panel.System -> SystemPanel(app, p.target, close)
                 Panel.Startup -> StartupPanel(app, close)
                 Panel.Controller -> ControllerPanel(app, close)
+                Panel.Sounds -> SoundsPanel(app, close)
                 Panel.Theme -> ThemePanel(app, close)
                 Panel.About -> AboutPanel(app, close)
                 is Panel.EditGame -> EditGamePanel(app, p.gameId, p.target, close)

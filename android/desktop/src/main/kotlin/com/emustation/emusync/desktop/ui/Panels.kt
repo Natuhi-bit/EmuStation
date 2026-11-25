@@ -36,6 +36,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import com.emustation.emusync.desktop.platform.Sfx
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -83,6 +85,7 @@ sealed interface Panel {
     data class System(val target: String) : Panel
     data object Startup : Panel
     data object Controller : Panel
+    data object Sounds : Panel
     data object Theme : Panel
     data object About : Panel
     data class EditGame(val gameId: String?, val target: String? = null) : Panel
@@ -308,6 +311,55 @@ fun ControllerPanel(app: AppController, onClose: () -> Unit) {
         Note("画面の下の説明は、最後に触ったコントローラーの記号（PlayStation なら × ○ △）で出ます")
         Note("パネルやダイアログでは、上下でボタンや入力欄を移り、決定で押します。文字の入力は画面のキーボード（タッチ）を使ってください")
         Note("ゲーム（エミュ）を遊んでいる間は、コントローラーの操作はエミュにだけ届きます。ゲームを終えると emusync が前に出ます")
+    }
+}
+
+// ---------------------------------------------------------------- 設定：操作音
+@Composable
+fun SoundsPanel(app: AppController, onClose: () -> Unit) {
+    val c by app.config.collectAsState()
+    val dir = remember { File(app.root, "sounds") }
+    var tick by remember { mutableStateOf(0) } // 音を入れ替えたら表示を読み直す
+    var message by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    PanelScaffold("操作音", onClose) {
+        ToggleRow("操作音を鳴らす", "PS3 の XMB のように、選ぶ・決定・戻る・オプションで音を鳴らします", c.sounds, true) { v ->
+            app.update { it.copy(sounds = v) }
+        }
+        Label("音の大きさ")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(30 to "小", 50 to "やや小", 70 to "中", 90 to "大").forEach { (v, label) ->
+                FilterChip(c.soundVolume == v, { app.update { it.copy(soundVolume = v) }; com.emustation.emusync.desktop.platform.Sounds.play(Sfx.Cursor) },
+                    { Text(label) }, modifier = Modifier.focusRing(RoundedCornerShape(8.dp)))
+            }
+        }
+        Label("音のファイル（MP3・WAV）")
+        Note("音のファイルはアプリには入っていません。持っている音のファイルを選ぶと、この PC の emusync のフォルダに写して使います")
+        key(tick) {
+            Sfx.entries.forEach { sfx ->
+                val file = com.emustation.emusync.desktop.platform.Sounds.fileOf(dir, sfx)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(sfx.label, color = XmbText.primary, fontSize = 15.sp)
+                        Note(file?.name ?: "なし（鳴らさない）")
+                    }
+                    if (file != null) {
+                        TextButton(onClick = { com.emustation.emusync.desktop.platform.Sounds.play(sfx) }, modifier = Modifier.focusRing()) { Text("試す") }
+                        TextButton(onClick = {
+                            com.emustation.emusync.desktop.platform.Sounds.remove(dir, sfx); tick++
+                        }, modifier = Modifier.focusRing()) { Text("外す") }
+                    }
+                    OutlinedButton(onClick = {
+                        Pickers.file("${sfx.label}の音を選ぶ", setOf("mp3", "wav"))?.let { f ->
+                            message = runCatching { com.emustation.emusync.desktop.platform.Sounds.install(dir, sfx, f) }
+                                .fold({ com.emustation.emusync.desktop.platform.Sounds.play(sfx); true to "${sfx.label}の音にしました" }, { false to "読めないファイルです（MP3 か WAV を選んでください）" })
+                            tick++
+                        }
+                    }, modifier = Modifier.focusRing()) { Text("選ぶ") }
+                }
+            }
+        }
+        message?.let { (ok, m) -> Note(m, if (ok) XmbText.ok else XmbText.error) }
+        Note("ファイルを直接置いてもかまいません：${dir.path} に cursor.mp3・decide.mp3・back.mp3・options.mp3（WAV も可）")
     }
 }
 

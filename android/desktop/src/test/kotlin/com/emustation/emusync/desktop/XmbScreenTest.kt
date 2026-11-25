@@ -24,6 +24,7 @@ import com.emustation.emusync.desktop.data.SystemConfig
 import com.emustation.emusync.desktop.domain.AppController
 import com.emustation.emusync.desktop.domain.PlayPhase
 import com.emustation.emusync.desktop.domain.SyncService
+import com.emustation.emusync.desktop.platform.Sfx
 import com.emustation.emusync.desktop.ui.EmusyncTheme
 import com.emustation.emusync.desktop.ui.XmbApp
 import com.emustation.emusync.domain.sync.RemoteApi
@@ -184,5 +185,33 @@ class XmbScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText("サーバー版を使う").assertExists()
         compose.onRoot().save("desktop-conflicts-panel")
+    }
+
+    @Test
+    fun operationSounds_likePs3() {
+        val heard = mutableListOf<com.emustation.emusync.desktop.platform.Sfx>()
+        com.emustation.emusync.desktop.platform.Sounds.listener = { heard += it }
+        try {
+            show()
+            compose.waitForIdle()
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) } // 項目を動かす
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) } // 一番上なので動かない → 鳴らない
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) } // 列を動かす
+            compose.onRoot().performKeyInput { pressKey(Key.Tab) } // オプション
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+            compose.onRoot().performKeyInput { pressKey(Key.Escape) } // 閉じる
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft); pressKey(Key.DirectionLeft) } // 設定の列
+            compose.onRoot().performKeyInput { pressKey(Key.Enter) } // サーバーのパネル
+            compose.waitForIdle()
+            compose.onRoot().performKeyInput { pressKey(Key.Escape) }
+            compose.waitForIdle()
+            assertEquals(
+                listOf(Sfx.Cursor, Sfx.Cursor, Sfx.Cursor, Sfx.Options, Sfx.Cursor, Sfx.Back, Sfx.Cursor, Sfx.Cursor, Sfx.Decide, Sfx.Back),
+                heard,
+            )
+        } finally {
+            com.emustation.emusync.desktop.platform.Sounds.listener = null
+        }
     }
 }

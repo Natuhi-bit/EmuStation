@@ -61,6 +61,10 @@ data class AppConfig(
     val gamepad: Boolean = true,
     /** 決定のボタン（"A"：下のボタン、"B"：右のボタン。PS3 の日本の並びは右で決定） */
     val confirmButton: String = "A",
+    /** 操作音を鳴らす（音のファイルは設定 → 操作音で選ぶ） */
+    val sounds: Boolean = true,
+    /** 操作音の大きさ（0〜100） */
+    val soundVolume: Int = 70,
     val systems: List<SystemConfig> = emptyList(),
     val games: List<Game> = emptyList(),
 ) {

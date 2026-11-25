@@ -50,6 +50,8 @@ fun main(args: Array<String>) {
     if (!single.acquire { showRequests.value++ }) return // 2つ目は、1つ目を前に出して終わる
 
     val app = AppController()
+    // 操作音（利用者が選んだ音のファイル）
+    com.emustation.emusync.desktop.platform.Sounds.load(java.io.File(app.root, "sounds"))
     app.refresh()
     app.startPeriodic()
     // まだ情報とカバーを調べていないゲーム（この機能より前に追加したものなど）を調べる
