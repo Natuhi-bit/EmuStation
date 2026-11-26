@@ -33,6 +33,7 @@ import com.emustation.emusync.desktop.platform.PadState
 import com.emustation.emusync.desktop.platform.RemotePlay
 import com.emustation.emusync.desktop.platform.RunningEmulator
 import com.emustation.emusync.desktop.platform.SdlSource
+import com.emustation.emusync.desktop.platform.WindowActivator
 import com.emustation.emusync.desktop.platform.SingleInstance
 import com.emustation.emusync.desktop.platform.XInputSource
 import com.emustation.emusync.desktop.platform.isWindows
@@ -50,12 +51,28 @@ import org.jetbrains.skia.Image
  */
 fun main(args: Array<String>) {
     val showRequests = MutableStateFlow(0)
-    // リモートプレイ（Sunshine から --remote で起動）：全画面で前に出す
+    // リモートプレイ（Sunshine から --remote で起動）：全画面で前に出す。
+    // Moonlight で「アプリを終了」すると Sunshine が --remote-end で起動する：全画面を解いて最小化する
     val remote = RemotePlay.ARG in args
     val fullscreenRequests = MutableStateFlow(if (remote) 1 else 0)
+    val remoteEndRequests = MutableStateFlow(0)
+    // リモートプレイ中か（このあいだは、エミュで遊んでいなければ、コントローラーで EmuStation を前に出して操作できる）
+    val remoteSession = java.util.concurrent.atomic.AtomicBoolean(remote)
     val single = SingleInstance()
-    // 2つ目は、1つ目を前に出して終わる
-    if (!single.acquire(remote) { r -> if (r) fullscreenRequests.value++; showRequests.value++ }) return
+    if (RemotePlay.END_ARG in args) {
+        // 終わりの知らせだけ。EmuStation が動いていなければ何もしない（ここで起動しない）
+        single.send(SingleInstance.Request.RemoteEnd)
+        return
+    }
+    // 2つ目は、1つ目に伝えて終わる
+    val first = single.acquire(if (remote) SingleInstance.Request.Remote else SingleInstance.Request.Show) { r ->
+        when (r) {
+            SingleInstance.Request.Show -> showRequests.value++
+            SingleInstance.Request.Remote -> { remoteSession.set(true); fullscreenRequests.value++; showRequests.value++ }
+            SingleInstance.Request.RemoteEnd -> { remoteSession.set(false); remoteEndRequests.value++ }
+        }
+    }
+    if (!first) return
 
     val app = AppController()
     // 操作音（利用者が選んだ音のファイル）
@@ -81,8 +98,12 @@ fun main(args: Array<String>) {
             val c = app.config.value
             if (presses.isNotEmpty() && c.gamepad) {
                 SwingUtilities.invokeLater {
-                    val w = padTarget.get()
-                    if (w == null || !w.isActive) return@invokeLater
+                    val w = padTarget.get() ?: return@invokeLater
+                    if (!w.isActive) {
+                        // リモートプレイ中（Moonlight で EmuStation を映している）で、エミュで遊んでいなければ、
+                        // EmuStation を操作しているはずなので前に出して受け取る（前に出せていないと入力が届かないため）
+                        if (remoteSession.get() && w.isVisible && !RunningEmulator.isRunning()) WindowActivator.activate(w) else return@invokeLater
+                    }
                     state.style?.let(Gamepad::setStyle)
                     Gamepad.markPad()
                     presses.forEach { b -> PadKeys.map(b, Gamepad.mode, c.confirmButton == "B")?.let { AwtKeys.send(w, it) } }
@@ -122,9 +143,17 @@ fun main(args: Array<String>) {
         LaunchedEffect(reopen) { if (reopen > 0) visible = true }
         // リモートプレイ：全画面にして前に出す（Moonlight の画面いっぱいに XMB を出す）
         val fullscreen by fullscreenRequests.collectAsState()
+        val remoteEnd by remoteEndRequests.collectAsState()
+        LaunchedEffect(remoteEnd) {
+            if (remoteEnd > 0) {
+                windowState.placement = WindowPlacement.Floating
+                windowState.isMinimized = true
+            }
+        }
         LaunchedEffect(fullscreen) {
             if (fullscreen > 0) {
                 visible = true
+                windowState.isMinimized = false
                 windowState.placement = WindowPlacement.Fullscreen
             }
         }
@@ -163,11 +192,8 @@ fun main(args: Array<String>) {
         ) {
             LaunchedEffect(visible, reopen) {
                 if (visible) {
-                    // ほかの窓（Sunshine から起動したときなど）の後ろに隠れないように、いったん最前面にしてから戻す
-                    window.isAlwaysOnTop = true
-                    window.toFront()
-                    window.requestFocus()
-                    window.isAlwaysOnTop = false
+                    // ほかの窓（Sunshine から起動したときなど）の後ろに隠れず、入力も受け取れるように前に出す
+                    WindowActivator.activate(window)
                 }
             }
             // コントローラーのボタンを送る先（このウィンドウ）
@@ -180,10 +206,7 @@ fun main(args: Array<String>) {
                 var prev: PlayPhase? = null
                 app.play.phase.collect { p ->
                     if (prev is PlayPhase.Playing && p !is PlayPhase.Playing && visible) {
-                        window.isAlwaysOnTop = true
-                        window.toFront()
-                        window.requestFocus()
-                        window.isAlwaysOnTop = false
+                        WindowActivator.activate(window)
                     }
                     prev = p
                 }

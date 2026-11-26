@@ -83,11 +83,20 @@ object Autostart {
 class SingleInstance(private val port: Int = 47615) {
     private var server: ServerSocket? = null
 
-    /**
-     * 1つ目なら true。2つ目なら1つ目に「表示して」と伝えて false。
-     * [remote] なら「全画面で表示して」（リモートプレイの Sunshine から起動されたとき）
-     */
-    fun acquire(remote: Boolean = false, onShowRequest: (remote: Boolean) -> Unit): Boolean {
+    /** 2つ目から1つ目へのお願い */
+    enum class Request(val message: String) {
+        /** 表示して */
+        Show("emusync:show"),
+
+        /** 全画面で表示して（リモートプレイの Sunshine から起動されたとき） */
+        Remote("emusync:show:remote"),
+
+        /** リモートプレイが終わった（Moonlight で「アプリを終了」したとき）。全画面を解いて最小化して */
+        RemoteEnd("emusync:remote:end"),
+    }
+
+    /** 1つ目なら true。2つ目なら1つ目に [request] を伝えて false */
+    fun acquire(request: Request = Request.Show, onRequest: (Request) -> Unit): Boolean {
         return try {
             val s = ServerSocket(port, 4, InetAddress.getLoopbackAddress())
             server = s
@@ -95,27 +104,25 @@ class SingleInstance(private val port: Int = 47615) {
                 while (!s.isClosed) {
                     runCatching {
                         s.accept().use { c ->
-                            when (c.getInputStream().bufferedReader().readLine()) {
-                                MESSAGE -> onShowRequest(false)
-                                REMOTE -> onShowRequest(true)
-                            }
+                            val line = c.getInputStream().bufferedReader().readLine()
+                            Request.entries.firstOrNull { it.message == line }?.let(onRequest)
                         }
                     }
                 }
             }
             true
         } catch (_: java.io.IOException) {
-            runCatching {
-                Socket(InetAddress.getLoopbackAddress(), port).use { it.getOutputStream().write("${if (remote) REMOTE else MESSAGE}\n".toByteArray()) }
-            }
+            send(request)
             false
         }
     }
 
-    fun release() = runCatching { server?.close() }
+    /** 1つ目に伝えるだけ（1つ目がいなければ false） */
+    fun send(request: Request): Boolean = runCatching {
+        WindowActivator.allowOthers() // 1つ目が前に出られるように
+        Socket(InetAddress.getLoopbackAddress(), port).use { it.getOutputStream().write("${request.message}\n".toByteArray()) }
+        true
+    }.getOrDefault(false)
 
-    private companion object {
-        const val MESSAGE = "emusync:show"
-        const val REMOTE = "emusync:show:remote"
-    }
+    fun release() = runCatching { server?.close() }
 }

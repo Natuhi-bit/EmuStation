@@ -156,8 +156,10 @@ sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.p
   プレイ中の画面の「エミュを終了」でも同じ
 - **リモートプレイ（Sunshine＋Moonlight）**：Android などの Moonlight から、この PC の EmuStation を遊ぶ。
   「設定」→「リモートプレイ」で、Sunshine の設定画面のユーザー名・パスワードを入れて「登録する」を押すと、Sunshine に
-  「EmuStation」が登録される（コマンド `"…\EmuStation.exe" --remote`、Moonlight に出す絵付き）。Moonlight で「EmuStation」を選ぶと、
-  全画面の EmuStation（起動中ならそれを全画面にする）が映り、手元のコントローラーでゲームを選んで遊べる。セーブの同期は PC の EmuStation が行う。
+  「EmuStation」が登録される（切り離して起動するコマンド `"…\EmuStation.exe" --remote`、終了時のコマンド `--remote-end`、Moonlight に出す絵付き）。
+  Moonlight で「EmuStation」を選ぶと、全画面の EmuStation（起動中ならそれを全画面にする）が映り、手元のコントローラーでゲームを選んで遊べる。
+  リモートプレイ中は、エミュで遊んでいなければコントローラーの操作で EmuStation を前に出して受け取る。
+  Moonlight で「アプリを終了」すると、EmuStation は全画面を解いて最小化する（EmuStation 自身は常駐したまま）。セーブの同期は PC の EmuStation が行う。
   家の外からは、Android の WireGuard で自宅のネットワークにつなぎ、Moonlight の「＋」で PC の自宅での IP アドレスを入れる
   （ペアリングは家の中で済ませておく。WireGuard の AllowedIPs に自宅のネットワークを含める。同期のサーバーも同じアドレスのまま使える）。
   Android 版のメニュー「リモートプレイ（Moonlight）」から、案内と Moonlight・WireGuard を開ける

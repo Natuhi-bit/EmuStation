@@ -1,6 +1,8 @@
 package com.emustation.emusync.desktop.platform
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -31,8 +33,14 @@ object RemotePlay {
     /** インストールした EmuStation の exe（開発中に動かしているときは null） */
     fun exePath(): String? = System.getProperty("jpackage.app-path")?.takeIf { File(it).isFile }
 
-    /** Sunshine に登録するコマンド */
+    /** Moonlight で「アプリを終了」したとき（Sunshine が実行する）。起動中の EmuStation の全画面を解いて最小化する */
+    const val END_ARG = "--remote-end"
+
+    /** Sunshine に登録するコマンド（起動） */
     fun command(exe: String): String = "\"$exe\" $ARG"
+
+    /** Sunshine に登録するコマンド（終了） */
+    fun endCommand(exe: String): String = "\"$exe\" $END_ARG"
 
     /**
      * この PC の、自宅のネットワークでの IP アドレス（192.168.x.x・10.x.x.x・172.16〜31.x.x）。
@@ -81,8 +89,13 @@ class SunshineClient(
     private fun get(path: String) = Request.Builder().url(baseUrl.trimEnd('/') + path)
         .header("Authorization", Credentials.basic(user, password, Charsets.UTF_8))
 
-    /** EmuStation を登録する（すでにあれば、コマンドと絵を新しくする） */
-    fun register(command: String, imagePath: String?): Result {
+    /**
+     * EmuStation を登録する（すでにあれば、コマンドと絵を新しくする）。
+     * 起動は「切り離して実行するコマンド」（detached）にする。アプリのコマンドを空にすると、Sunshine は
+     * Moonlight で「アプリを終了」するまでセッションを続け、終了したら終わりのコマンド（prep-cmd の undo）を実行する。
+     * EmuStation 自身は Sunshine に終わらされない（常駐し続ける）
+     */
+    fun register(command: String, endCommand: String, imagePath: String?): Result {
         return try {
             val list = http.newCall(get("/api/apps").build()).execute().use { r ->
                 if (r.code == 401) return Result.BadLogin
@@ -93,16 +106,21 @@ class SunshineClient(
             val body = buildJsonObject {
                 put("name", RemotePlay.APP_NAME)
                 put("index", index)
-                put("cmd", command)
+                put("cmd", "")
                 put("output", "")
                 put("exclude-global-prep-cmd", false)
                 put("elevated", false)
-                // EmuStation は常駐するので、起動したコマンド（2 つ目の EmuStation）はすぐ終わる。終わっても配信は続ける
                 put("auto-detach", true)
                 put("wait-all", false)
                 put("exit-timeout", 5)
-                put("prep-cmd", buildJsonArray { })
-                put("detached", buildJsonArray { })
+                put("prep-cmd", buildJsonArray {
+                    add(buildJsonObject {
+                        put("do", "")
+                        put("undo", endCommand)
+                        put("elevated", false)
+                    })
+                })
+                put("detached", buildJsonArray { add(JsonPrimitive(command)) })
                 if (!imagePath.isNullOrBlank()) put("image-path", imagePath)
             }
             val req = get("/api/apps").post(body.toString().toRequestBody("application/json".toMediaType())).build()

@@ -392,6 +392,7 @@ fun RemotePlayPanel(app: AppController, onClose: () -> Unit) {
     val exe = remember { com.emustation.emusync.desktop.platform.RemotePlay.exePath() }
     val poster = remember { com.emustation.emusync.desktop.platform.RemotePlay.exportPoster(app.root) }
     val command = exe?.let { com.emustation.emusync.desktop.platform.RemotePlay.command(it) }
+    val endCommand = exe?.let { com.emustation.emusync.desktop.platform.RemotePlay.endCommand(it) }
     val localAddresses = remember { com.emustation.emusync.desktop.platform.RemotePlay.localAddresses() }
     var user by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -424,7 +425,7 @@ fun RemotePlayPanel(app: AppController, onClose: () -> Unit) {
                         scope.launch {
                             val r = withContext(Dispatchers.IO) {
                                 com.emustation.emusync.desktop.platform.SunshineClient(user = user, password = password)
-                                    .register(command, poster?.path)
+                                    .register(command, endCommand!!, poster?.path)
                             }
                             message = when (r) {
                                 is com.emustation.emusync.desktop.platform.SunshineClient.Result.Added ->
@@ -441,8 +442,15 @@ fun RemotePlayPanel(app: AppController, onClose: () -> Unit) {
                 ) { Text(if (busy) "登録しています…" else "登録する") }
                 message?.let { (ok, text) -> Text(text, color = if (ok) XmbText.ok else XmbText.error, fontSize = 13.sp) }
             }
-            Note("自分で登録するときは、Sunshine の「Applications」→「Add New」で、名前を EmuStation、コマンドを次のようにします：")
-            SelectionContainer { Text(command, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }
+            Note("前の版で登録した場合は、もう一度「登録する」を押してください（Moonlight で「アプリを終了」したとき、EmuStation を最小化するようになります）")
+            Note("自分で登録するときは、Sunshine の「Applications」→「Add New」で、名前を EmuStation、Command は空のまま、" +
+                "「Detached Commands」に 1 つ目、「Command Preparations」の Undo に 2 つ目を入れます：")
+            SelectionContainer {
+                Column {
+                    Text(command, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                    Text(endCommand!!, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
             poster?.let { f ->
                 Note("画像（Image）：")
                 SelectionContainer { Text(f.path, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }
@@ -466,7 +474,7 @@ fun RemotePlayPanel(app: AppController, onClose: () -> Unit) {
 
         Label("遊び方")
         Note("Moonlight で「EmuStation」を選ぶ → コントローラーでゲームを選んで遊ぶ → ゲームを終える（エミュの画面で Alt+F4 か、プレイ中の画面の「エミュを終了」）" +
-            " → セーブが自動で送られる → 遊び終わったら Moonlight で「アプリを終了」")
+            " → セーブが自動で送られる → 遊び終わったら Moonlight で「アプリを終了」（EmuStation は全画面を解いて最小化します）")
     }
 }
 
