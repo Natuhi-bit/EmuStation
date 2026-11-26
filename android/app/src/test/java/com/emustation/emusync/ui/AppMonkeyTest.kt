@@ -379,6 +379,10 @@ class AppMonkeyTest {
     /** 操作しようとした要素が、その間に画面から消えた（テストの都合で、アプリの不具合ではない） */
     private fun isStale(e: Throwable): Boolean {
         val m = e.message.orEmpty()
-        return "seed=" !in m && ("no longer in the tree" in m || "Failed to perform" in m || "No node" in m || "outside of the" in m)
+        // 「Can't retrieve node at index」：押せる要素を数えてから押すまでの間に、要素が減った
+        return "seed=" !in m && (
+            "no longer in the tree" in m || "Failed to perform" in m || "No node" in m || "outside of the" in m ||
+                "Can't retrieve node at index" in m
+            )
     }
 }
