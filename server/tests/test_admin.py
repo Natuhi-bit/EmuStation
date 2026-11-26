@@ -215,3 +215,28 @@ def test_import_too_large_file_is_reported(admin, core, monkeypatch):
     r = upload_folder(admin, {"big.bin": b"x" * 11, "ok.bin": b"y"})
     st = {i["rel"]: (i["status"], i.get("reason")) for i in r["preview"]["items"]}
     assert st == {"big.bin": ("invalid", "大きすぎます"), "ok.bin": ("new", None)}
+
+
+def test_import_zip_with_duplicate_names_uses_the_last(admin, core, monkeypatch):
+    """zip に同じ名前が重なっていても 500 にならず、展開したときと同じく後のものを取り込む（モンキーテストで見つかった）"""
+    monkeypatch.setattr(core.ADMIN, "max_bytes", 10)
+    for later_is_big in (True, False):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z, pytest.warns(UserWarning):
+            z.writestr("a.bin", b"small" if later_is_big else b"x" * 11)
+            z.writestr("a.bin", b"x" * 11 if later_is_big else b"later")
+            z.writestr("b.bin", b"b1")
+            z.writestr("b.bin", b"b2")
+        r = admin.post("/admin/api/imports", files={"zip": ("x.zip", buf.getvalue(), "application/zip")},
+                       data={"target": "psp"}, headers=H).json()
+        assert r["files"] == 2
+        st = {i["rel"]: i["status"] for i in r["preview"]["items"]}
+        assert st == {"a.bin": "invalid" if later_is_big else "new", "b.bin": "new"}
+        c = admin.post(f"/admin/api/imports/{r['id']}/commit", json={"target": "psp", "prefix": f"t{later_is_big}"}, headers=H)
+        assert c.status_code == 200, c.text
+        o = {f["rel"]: f for f in admin.get("/admin/api/files", params={"target": "psp"}).json()["files"]}
+        assert o[f"t{later_is_big}/b.bin"]["sha256"] == sha(b"b2")
+        if not later_is_big:
+            assert o["tFalse/a.bin"]["sha256"] == sha(b"later")
+        else:
+            assert "tTrue/a.bin" not in o

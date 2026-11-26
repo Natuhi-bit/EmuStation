@@ -436,22 +436,31 @@ def build_router(core: Core) -> APIRouter:
         """
         form = await request.form(max_files=IMPORT_MAX_FILES + 1, max_fields=IMPORT_MAX_FILES + 20)
         iid, d = imports.create()
-        entries: list[dict] = []
+        # 同じパスが 2 回出てきたら（zip に同じ名前が重なっているなど）、展開したときと同じく後のものを使う
+        entries: dict[str, dict] = {}
         total = 0
+        count = 0
+
+        def put(rel: str, entry: dict) -> None:
+            old = entries.pop(rel, None)
+            if old and old["blob"]:
+                (d / old["blob"]).unlink(missing_ok=True)
+            entries[rel] = entry
 
         def add(rel: str, data: bytes) -> None:
-            nonlocal total
+            nonlocal total, count
             rel = normalize_rel(rel)
             if not rel or rel.startswith("__MACOSX/") or rel.endswith("/"):
                 return
-            if len(entries) >= IMPORT_MAX_FILES:
+            if count >= IMPORT_MAX_FILES:
                 raise HTTPException(413, f"ファイルが多すぎます（{IMPORT_MAX_FILES} 件まで）")
             total += len(data)
             if total > IMPORT_MAX_TOTAL:
                 raise HTTPException(413, "合計が大きすぎます")
-            blob = f"{len(entries):06d}.bin"
+            blob = f"{count:06d}.bin"
+            count += 1
             (d / blob).write_bytes(data)
-            entries.append({"rel": rel, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(), "blob": blob})
+            put(rel, {"rel": rel, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(), "blob": blob})
 
         try:
             zf = form.get("zip")
@@ -464,8 +473,9 @@ def build_router(core: Core) -> APIRouter:
                                 continue
                             if info.file_size > core.max_bytes:
                                 # 大きすぎるものは中身を読まず、プレビューで知らせる
-                                entries.append({"rel": normalize_rel(info.filename), "size": info.file_size,
-                                                "sha256": "", "blob": ""})
+                                rel = normalize_rel(info.filename)
+                                if rel:
+                                    put(rel, {"rel": rel, "size": info.file_size, "sha256": "", "blob": ""})
                                 continue
                             add(info.filename, z.read(info))
                 except zipfile.BadZipFile:
@@ -479,7 +489,7 @@ def build_router(core: Core) -> APIRouter:
                     add(str(rel), await f.read())
             if not entries:
                 raise HTTPException(400, "取り込めるファイルがありません")
-            (d / "manifest.json").write_text(json.dumps({"created_at": time.time(), "files": entries}),
+            (d / "manifest.json").write_text(json.dumps({"created_at": time.time(), "files": list(entries.values())}),
                                              encoding="utf-8")
         except Exception:
             shutil.rmtree(d, ignore_errors=True)
@@ -487,9 +497,9 @@ def build_router(core: Core) -> APIRouter:
         target = str(form.get("target") or "")
         preview = None
         if target:
-            preview = plan_import(core, entries, ImportOptions(target=target))
+            preview = plan_import(core, list(entries.values()), ImportOptions(target=target))
         return {"id": iid, "files": len(entries), "bytes": total,
-                "top": common_top([e["rel"] for e in entries]), "preview": preview}
+                "top": common_top(list(entries)), "preview": preview}
 
     @router.post("/api/imports/{iid}/preview", dependencies=[admin])
     def preview(iid: str, opt: ImportOptions):
@@ -499,11 +509,12 @@ def build_router(core: Core) -> APIRouter:
     @router.post("/api/imports/{iid}/commit", dependencies=[admin])
     def commit(iid: str, opt: ImportOptions):
         d = imports.path(iid)
-        plan = plan_import(core, ImportStore.manifest(d)["files"], opt)
-        blobs = {f["rel"]: f["blob"] for f in ImportStore.manifest(d)["files"]}
+        files = ImportStore.manifest(d)["files"]
+        plan = plan_import(core, files, opt)
+        blobs = {f["rel"]: f["blob"] for f in files}
         done = {"new": 0, "update": 0}
         for item in plan["items"]:
-            if item["status"] not in ("new", "update"):
+            if item["status"] not in ("new", "update") or not blobs.get(item["source"]):
                 continue
             data = (d / blobs[item["source"]]).read_bytes()
             core.put_version(item["path"], data, IMPORT_DEVICE, None)

@@ -23,6 +23,12 @@ import zipfile
 from urllib.parse import quote, unquote
 
 import httpx
+
+try:  # 新しい Starlette の TestClient は httpx2 を使う
+    import httpx2
+    INVALID_URL: tuple[type[Exception], ...] = (httpx.InvalidURL, httpx2.InvalidURL)
+except ImportError:
+    INVALID_URL = (httpx.InvalidURL,)
 import pytest
 from fastapi.testclient import TestClient
 
@@ -167,7 +173,7 @@ class Monkey:
         try:
             try:
                 r = self.c.request(method, u, **kw)
-            except httpx.InvalidURL:  # 送る側（httpx）が断った URL は、エンコードして送り直す
+            except INVALID_URL:  # 送る側（httpx）が断った URL は、エンコードして送り直す
                 r = self.c.request(method, quote(u, safe="/%"), **kw)
         except Exception as e:  # サーバーの中で例外（TestClient はそのまま投げる）
             raise Failure(f"サーバーで例外: {type(e).__name__}: {e}\n  seed={self.seed}\n  直前の操作:\n    "
