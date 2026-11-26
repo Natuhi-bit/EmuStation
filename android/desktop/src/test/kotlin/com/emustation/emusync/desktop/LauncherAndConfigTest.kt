@@ -94,7 +94,7 @@ class LauncherAndConfigTest {
 
     @Test
     fun emulatorEnvironment_dropsOwnRuntimeFromPath() {
-        // インストールしたアプリは runtime/bin を PATH の先頭に足す。エミュには渡さない（RPCS3 が msvcp140.dll を読み違える）
+        // EmuStation 自身のフォルダは、エミュに渡す PATH から外す（RPCS3 が msvcp140.dll を読み違える）
         val own = listOf(java.io.File("/opt/emusync/runtime"), java.io.File("/opt/emusync"))
         val env = mutableMapOf(
             "PATH" to "/opt/emusync/runtime/bin:/usr/bin:/opt/emusync:/opt/emusync-other/bin::/opt/emusync/runtime/bin/server",
@@ -107,5 +107,31 @@ class LauncherAndConfigTest {
         val env2 = mutableMapOf("Path" to "/opt/emusync/runtime/bin:/bin")
         com.emustation.emusync.desktop.platform.Launcher.cleanEnvironment(env2, own)
         assertEquals("/bin", env2["Path"])
+    }
+
+    @Test
+    fun emulatorLaunch_clearsInheritedDllDirectory() {
+        val d = com.emustation.emusync.desktop.platform.DllDirectory
+        if (!com.emustation.emusync.desktop.platform.isWindows) {
+            assertEquals(null, d.current())
+            assertEquals(42, d.withoutOwn { 42 })
+            return
+        }
+        // インストールした EmuStation は、起動部分が runtime\bin を SetDllDirectory する（エミュに引き継がれる）
+        val dir = java.nio.file.Files.createTempDirectory("dlldir").toFile().absolutePath
+        val before = d.current()
+        try {
+            assertEquals(true, d.set(dir))
+            assertEquals(dir, d.current())
+            val seen = d.withoutOwn { d.current() }
+            assertEquals(null, seen)          // 起動する瞬間は外れている
+            assertEquals(dir, d.current())    // 起動したら元に戻る
+            // 実際に子プロセスを起動しても戻る
+            val p = d.withoutOwn { ProcessBuilder("cmd", "/c", "exit", "0").start() }
+            p.waitFor()
+            assertEquals(dir, d.current())
+        } finally {
+            d.set(before)
+        }
     }
 }

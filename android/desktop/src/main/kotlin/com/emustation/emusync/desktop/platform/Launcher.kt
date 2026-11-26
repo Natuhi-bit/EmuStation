@@ -3,6 +3,9 @@ package com.emustation.emusync.desktop.platform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import com.sun.jna.Native
+import com.sun.jna.WString
+import com.sun.jna.win32.StdCallLibrary
 import java.io.File
 
 /**
@@ -49,9 +52,8 @@ object Launcher {
      * @return 起動から終了までの秒数
      */
     /**
-     * emusync 自身のフォルダ（同梱の Java の実行環境など）。インストールしたアプリは、起動したときに
-     * runtime\bin を PATH の先頭に足すので、そのままエミュに渡すと、エミュが emusync の DLL（msvcp140.dll など）を
-     * 読んでしまう（RPCS3 が「msvcp140.dll was incorrectly installed」で止まる）
+     * EmuStation 自身のフォルダ（同梱の Java の実行環境など）。ここが PATH に入っていると、エミュが EmuStation の
+     * DLL（msvcp140.dll など）を読んでしまうので、エミュに渡す PATH からは外す（念のため。本当の原因は [DllDirectory]）
      */
     fun ownDirs(): List<File> = listOfNotNull(
         System.getProperty("java.home")?.let(::File),
@@ -78,7 +80,7 @@ object Launcher {
         val pb = ProcessBuilder(command).directory(workDir).redirectErrorStream(true)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
         cleanEnvironment(pb.environment(), ownDirs())
-        val p = pb.start()
+        val p = DllDirectory.withoutOwn { pb.start() }
         onStarted()
         val tracked = mutableSetOf<ProcessHandle>()
         while (p.isAlive) {
@@ -91,5 +93,50 @@ object Launcher {
             delay(1_000)
         }
         (System.currentTimeMillis() - started) / 1000
+    }
+}
+
+/**
+ * Windows の「DLL を探す追加のフォルダ」（SetDllDirectory）。インストールした EmuStation は、起動部分（jpackage）が
+ * Java の実行環境のフォルダ（runtime\bin）をここに入れる。これは起動したエミュにも引き継がれ、C:\Windows\System32 より
+ * 先に探されるので、エミュが EmuStation 同梱の古い msvcp140.dll を読んでしまう
+ * （RPCS3 が「msvcp140.dll was incorrectly installed at ...\EmuStation\runtime\bin」で止まる）。
+ * エミュを起動する瞬間だけ外して、すぐ元に戻す
+ */
+object DllDirectory {
+    @Suppress("FunctionName")
+    private interface Kernel32 : StdCallLibrary {
+        fun GetDllDirectoryW(nBufferLength: Int, lpBuffer: CharArray?): Int
+        fun SetDllDirectoryW(lpPathName: WString?): Boolean
+    }
+
+    private val k32: Kernel32? by lazy {
+        if (!isWindows) null else runCatching { Native.load("kernel32", Kernel32::class.java) }.getOrNull()
+    }
+
+    /** 今の設定（なければ null） */
+    fun current(): String? {
+        val k = k32 ?: return null
+        val need = runCatching { k.GetDllDirectoryW(0, null) }.getOrDefault(0)
+        if (need <= 0) return null
+        val buf = CharArray(need + 1)
+        val n = runCatching { k.GetDllDirectoryW(buf.size, buf) }.getOrDefault(0)
+        return if (n in 1 until buf.size) String(buf, 0, n) else null
+    }
+
+    /** 設定する（テスト用。null で既定に戻す） */
+    internal fun set(path: String?): Boolean = k32?.let { k -> runCatching { k.SetDllDirectoryW(path?.let(::WString)) }.getOrDefault(false) } ?: false
+
+    /** 設定を外して [block]（プロセスの起動）を行い、元に戻す。Windows 以外や、設定がないときはそのまま */
+    @Synchronized
+    fun <T> withoutOwn(block: () -> T): T {
+        val k = k32 ?: return block()
+        val saved = current()?.takeIf { it.isNotEmpty() } ?: return block()
+        runCatching { k.SetDllDirectoryW(null) }
+        try {
+            return block()
+        } finally {
+            runCatching { k.SetDllDirectoryW(WString(saved)) }
+        }
     }
 }
