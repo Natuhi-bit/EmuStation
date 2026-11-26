@@ -396,6 +396,18 @@ private fun PlayOverlay(app: AppController, p: PlayPhase, openConflicts: (String
                         else "同期せずに起動しました。ゲームを終了したら、つながるときにクラウドに保存します",
                         color = XmbText.secondary,
                     )
+                    Text("エミュの画面で Alt+F4 を押すと、エミュ全体を終了します", color = XmbText.dim, fontSize = 13.sp)
+                    var closing by remember(p.since) { mutableStateOf(false) }
+                    OutlinedButton(
+                        onClick = {
+                            closing = true
+                            kotlin.concurrent.thread(isDaemon = true, name = "close-emulator") {
+                                com.emustation.emusync.desktop.platform.RunningEmulator.close()
+                            }
+                        },
+                        enabled = !closing,
+                        modifier = Modifier.focusRing().testTag("close-emulator"),
+                    ) { Text(if (closing) "エミュを終了しています…" else "エミュを終了") }
                 }
                 is PlayPhase.LockedByOther -> {
                     Text("${p.device} がプレイ中です", color = XmbText.warn, fontSize = 17.sp)

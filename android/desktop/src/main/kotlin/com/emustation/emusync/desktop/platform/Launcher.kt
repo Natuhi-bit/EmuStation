@@ -81,16 +81,23 @@ object Launcher {
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
         cleanEnvironment(pb.environment(), ownDirs())
         val p = DllDirectory.withoutOwn { pb.start() }
-        onStarted()
-        val tracked = mutableSetOf<ProcessHandle>()
-        while (p.isAlive) {
-            p.toHandle().descendants().forEach { tracked += it }
-            delay(1_000)
-        }
-        while (true) {
-            tracked.removeAll { !it.isAlive }
-            if (tracked.isEmpty()) break
-            delay(1_000)
+        val handle = p.toHandle()
+        RunningEmulator.started(handle)
+        try {
+            onStarted()
+            val tracked = mutableSetOf<ProcessHandle>()
+            while (p.isAlive) {
+                handle.descendants().forEach { tracked += it; RunningEmulator.track(it) }
+                delay(500)
+            }
+            while (true) {
+                tracked.toList().forEach { t -> runCatching { t.descendants().forEach { tracked += it; RunningEmulator.track(it) } } }
+                tracked.removeAll { !it.isAlive }
+                if (tracked.isEmpty()) break
+                delay(500)
+            }
+        } finally {
+            RunningEmulator.finished(handle)
         }
         (System.currentTimeMillis() - started) / 1000
     }

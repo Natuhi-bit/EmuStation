@@ -36,9 +36,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - name: Windows でしか確かめられないテスト（エミュの起動・DLL の探し場所）
+      - name: Windows でしか確かめられないテスト（エミュの起動・DLL の探し場所・エミュの終了）
         working-directory: android
-        run: ./gradlew.bat --no-daemon :desktop:test --tests "*LauncherAndConfigTest*"
+        run: ./gradlew.bat --no-daemon :desktop:test --tests "*LauncherAndConfigTest*" --tests "*RunningEmulatorTest*"
       - name: アプリの組み立て（Java の実行環境ごと）
         working-directory: android
         run: ./gradlew.bat --no-daemon :desktop:createDistributable

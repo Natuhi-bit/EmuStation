@@ -23,15 +23,18 @@ import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import com.emustation.emusync.desktop.domain.AppController
 import com.emustation.emusync.desktop.domain.PlayPhase
+import com.emustation.emusync.desktop.platform.AltF4Detector
 import com.emustation.emusync.desktop.platform.AwtKeys
 import com.emustation.emusync.desktop.platform.Gamepad
 import com.emustation.emusync.desktop.platform.PadKeys
 import com.emustation.emusync.desktop.platform.PadRepeater
 import com.emustation.emusync.desktop.platform.PadSource
 import com.emustation.emusync.desktop.platform.PadState
+import com.emustation.emusync.desktop.platform.RunningEmulator
 import com.emustation.emusync.desktop.platform.SdlSource
 import com.emustation.emusync.desktop.platform.SingleInstance
 import com.emustation.emusync.desktop.platform.XInputSource
+import com.emustation.emusync.desktop.platform.isWindows
 import com.emustation.emusync.desktop.ui.EmusyncTheme
 import com.emustation.emusync.desktop.ui.XmbApp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,6 +84,28 @@ fun main(args: Array<String>) {
                 }
             }
             Thread.sleep(16)
+        }
+    }
+
+    // Alt+F4：エミュの窓が前のときに押したら、エミュ全体（子プロセスも）を終わらせる
+    if (isWindows) thread(isDaemon = true, name = "alt-f4") {
+        val detector = AltF4Detector()
+        val user32 = com.sun.jna.platform.win32.User32.INSTANCE
+        fun down(vk: Int) = runCatching { user32.GetAsyncKeyState(vk).toInt() and 0x8000 != 0 }.getOrDefault(false)
+        var pids = emptySet<Long>()
+        var pidsAt = 0L
+        while (true) {
+            if (!RunningEmulator.isRunning()) {
+                detector.update(alt = false, f4 = false, foregroundPid = null, emulatorPids = emptySet())
+                Thread.sleep(500)
+                continue
+            }
+            val now = System.currentTimeMillis()
+            if (now - pidsAt > 1_000) { pids = RunningEmulator.pids(); pidsAt = now }
+            if (detector.update(down(0x12), down(0x73), RunningEmulator.foregroundPid(), pids)) {
+                thread(isDaemon = true, name = "close-emulator") { RunningEmulator.close() }
+            }
+            Thread.sleep(30)
         }
     }
 
