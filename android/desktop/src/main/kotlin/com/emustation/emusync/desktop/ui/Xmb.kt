@@ -20,9 +20,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.rememberScrollableState
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,13 +41,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -200,6 +201,36 @@ private val shadowText = TextStyle(shadow = Shadow(Color(0x99000000), androidx.c
 /** 選んでいる項目の文字は、PS3 のように白くにじませる */
 private val glowText = TextStyle(shadow = Shadow(Color(0xAAFFFFFF), androidx.compose.ui.geometry.Offset(0f, 0f), 14f))
 
+/**
+ * 項目の縦の位置（選んでいる項目からの距離 [rel] ごと）。PS3 のように、選んでいる項目はカテゴリーの列のすぐ下、
+ * その上の項目はカテゴリーの列より上に並ぶ。rel がアニメーションで少しずつ変わっても、位置が飛ばないように
+ * どこでもつながった形にする（選んでいた項目は、カテゴリーの列の上へすっと動く）
+ */
+internal fun xmbItemY(rel: Float, belowStart: Float, aboveStart: Float, step: Float, gapAfterSelected: Float): Float = when {
+    rel >= 1f -> belowStart + gapAfterSelected + step * rel
+    rel >= 0f -> belowStart + (step + gapAfterSelected) * rel
+    rel >= -1f -> belowStart + (belowStart - aboveStart) * rel
+    else -> aboveStart + step * (rel + 1f)
+}
+
+/**
+ * マウスのホイール・タッチパッドの回転を、項目 1 つずつの移動に直す。ホイールの 1 目盛り（1.0）で 1 つ。
+ * タッチパッドの細かい回転はためておき、1 目盛り分たまったら動かす。向きが変わったら、ためた分は捨てる
+ */
+class WheelStepper(private val notch: Float = 1f) {
+    private var acc = 0f
+
+    /** [dy] は下向きが +。返り値は動かす数（下へ +、上へ -） */
+    fun feed(dy: Float): Int {
+        if (dy == 0f) return 0
+        if (acc != 0f && (acc > 0f) != (dy > 0f)) acc = 0f
+        acc += dy
+        val n = (acc / notch).toInt()
+        acc -= n * notch
+        return n
+    }
+}
+
 /** XMB の動き：速く動き出して、やわらかく止まる */
 private val XmbEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
@@ -211,6 +242,7 @@ private val XmbEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
  * XMB の本体。操作は矢印・Enter・Tab（上の画面のキー操作）で行うので、中の項目はフォーカスを受けない
  * （パネルやダイアログで Tab・コントローラーの上下を押したとき、後ろの XMB に移らないように）
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Modifier, animated: Boolean = true) {
     val density = LocalDensity.current
@@ -252,24 +284,31 @@ fun Xmb(categories: List<XmbCategory>, state: XmbState, modifier: Modifier = Mod
         val step = 72.dp
         val belowStart = rowY + 70.dp
         val aboveStart = rowY - 110.dp
-        val scroll = rememberScrollableState { d ->
-            if (d < -20f) state.selectItem(cat, state.itemOf(cat) + 1) else if (d > 20f) state.selectItem(cat, state.itemOf(cat) - 1)
-            d
-        }
-        Box(Modifier.fillMaxSize().scrollable(scroll, Orientation.Vertical).offset(x = shift).alpha(enter.value)) {
+        val wheel = remember(cat.id) { WheelStepper() }
+        Box(
+            Modifier.fillMaxSize()
+                .onPointerEvent(PointerEventType.Scroll) { e ->
+                    val n = wheel.feed(e.changes.sumOf { it.scrollDelta.y.toDouble() }.toFloat())
+                    if (n != 0) state.selectItem(cat, state.itemOf(cat) + n)
+                    e.changes.forEach { it.consume() }
+                }
+                .offset(x = shift).alpha(enter.value),
+        ) {
             cat.items.forEachIndexed { i, item ->
-                val rel = i - itemPos
-                val y = if (rel >= -0.5f) belowStart + step * rel + (if (i > sel) 36.dp else 0.dp) else aboveStart + step * (rel + 1)
+                val y = xmbItemY(i - itemPos, belowStart.value, aboveStart.value, step.value, 36f).dp
                 if (y < -step || y > height + step) return@forEachIndexed
                 val selected = i == sel
-                ItemRow(
-                    item, selected, animated,
-                    Modifier.offset { IntOffset(with(density) { (anchorX - 44.dp).roundToPx() }, with(density) { y.roundToPx() }) }
-                        .focusProperties { canFocus = false }.clickable(remember { MutableInteractionSource() }, null) {
-                            if (selected) state.activate(item) else state.selectItem(cat, i)
-                        }
-                        .testTag("item-${item.id}"),
-                )
+                // 項目ごとの動き（大きさ・明るさ）を、その項目に結びつける（画面の外の項目を飛ばしても、隣にずれない）
+                key(item.id) {
+                    ItemRow(
+                        item, selected, animated,
+                        Modifier.offset { IntOffset(with(density) { (anchorX - 44.dp).roundToPx() }, with(density) { y.roundToPx() }) }
+                            .focusProperties { canFocus = false }.clickable(remember { MutableInteractionSource() }, null) {
+                                if (selected) state.activate(item) else state.selectItem(cat, i)
+                            }
+                            .testTag("item-${item.id}"),
+                    )
+                }
             }
         }
 
