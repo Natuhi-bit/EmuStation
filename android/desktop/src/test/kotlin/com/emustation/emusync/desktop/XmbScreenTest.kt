@@ -6,8 +6,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -146,6 +148,32 @@ class XmbScreenTest {
         compose.waitForIdle()
         compose.onNodeWithTag("emu-exe").assertExists()
         compose.onRoot().save("desktop-emulator-panel")
+    }
+
+    @Test
+    fun remotePlayPanel() {
+        // インストールした EmuStation として（exe の場所があるとき）
+        val exe = File(tmp.root, "EmuStation.exe").apply { writeText("") }
+        System.setProperty("jpackage.app-path", exe.path)
+        try {
+            show(category = 0)
+            // 設定の列の下のほうにあるので、見えるところまで下に動かす
+            repeat(20) {
+                val n = compose.onAllNodesWithTag("item-remote").fetchSemanticsNodes().firstOrNull()
+                if (n == null || n.boundsInRoot.top > 300f) {
+                    compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+                    compose.mainClock.advanceTimeBy(400)
+                    compose.waitForIdle()
+                }
+            }
+            compose.onRoot().performKeyInput { pressKey(Key.Enter) } // 開く
+            compose.waitForIdle()
+            compose.onNodeWithTag("sunshine-user").assertExists()
+            compose.onNodeWithTag("sunshine-register").assertIsNotEnabled() // ユーザー名・パスワードを入れるまで押せない
+            compose.onRoot().save("desktop-remote-play")
+        } finally {
+            System.clearProperty("jpackage.app-path")
+        }
     }
 
     @Test

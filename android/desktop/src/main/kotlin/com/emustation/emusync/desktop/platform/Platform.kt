@@ -83,8 +83,11 @@ object Autostart {
 class SingleInstance(private val port: Int = 47615) {
     private var server: ServerSocket? = null
 
-    /** 1つ目なら true。2つ目なら1つ目に「表示して」と伝えて false */
-    fun acquire(onShowRequest: () -> Unit): Boolean {
+    /**
+     * 1つ目なら true。2つ目なら1つ目に「表示して」と伝えて false。
+     * [remote] なら「全画面で表示して」（リモートプレイの Sunshine から起動されたとき）
+     */
+    fun acquire(remote: Boolean = false, onShowRequest: (remote: Boolean) -> Unit): Boolean {
         return try {
             val s = ServerSocket(port, 4, InetAddress.getLoopbackAddress())
             server = s
@@ -92,7 +95,10 @@ class SingleInstance(private val port: Int = 47615) {
                 while (!s.isClosed) {
                     runCatching {
                         s.accept().use { c ->
-                            if (c.getInputStream().bufferedReader().readLine() == MESSAGE) onShowRequest()
+                            when (c.getInputStream().bufferedReader().readLine()) {
+                                MESSAGE -> onShowRequest(false)
+                                REMOTE -> onShowRequest(true)
+                            }
                         }
                     }
                 }
@@ -100,7 +106,7 @@ class SingleInstance(private val port: Int = 47615) {
             true
         } catch (_: java.io.IOException) {
             runCatching {
-                Socket(InetAddress.getLoopbackAddress(), port).use { it.getOutputStream().write("$MESSAGE\n".toByteArray()) }
+                Socket(InetAddress.getLoopbackAddress(), port).use { it.getOutputStream().write("${if (remote) REMOTE else MESSAGE}\n".toByteArray()) }
             }
             false
         }
@@ -110,5 +116,6 @@ class SingleInstance(private val port: Int = 47615) {
 
     private companion object {
         const val MESSAGE = "emusync:show"
+        const val REMOTE = "emusync:show:remote"
     }
 }

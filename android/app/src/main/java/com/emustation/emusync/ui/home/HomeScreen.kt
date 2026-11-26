@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.MoreVert
@@ -108,6 +109,8 @@ fun HomeContent(
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     var menu by remember { mutableStateOf(false) }
+    var remotePlay by remember { mutableStateOf(false) }
+    if (remotePlay) RemotePlayDialog(onDismiss = { remotePlay = false })
     Scaffold(
         topBar = {
             TopAppBar(
@@ -124,6 +127,12 @@ fun HomeContent(
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_sync_all)) },
                                 onClick = { menu = false; actions.syncAll() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.remote_play_menu)) },
+                                leadingIcon = { Icon(Icons.Filled.CastConnected, null) },
+                                onClick = { menu = false; remotePlay = true },
+                                modifier = Modifier.testTag("menu-remote-play"),
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.settings_title)) },

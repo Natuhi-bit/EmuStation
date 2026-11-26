@@ -86,6 +86,7 @@ sealed interface Panel {
     data object Startup : Panel
     data object Controller : Panel
     data object Sounds : Panel
+    data object RemotePlay : Panel
     data object Theme : Panel
     data object About : Panel
     data class EditGame(val gameId: String?, val target: String? = null) : Panel
@@ -382,6 +383,90 @@ fun ThemePanel(app: AppController, onClose: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------- 設定：リモートプレイ
+@Composable
+fun RemotePlayPanel(app: AppController, onClose: () -> Unit) {
+    val exe = remember { com.emustation.emusync.desktop.platform.RemotePlay.exePath() }
+    val poster = remember { com.emustation.emusync.desktop.platform.RemotePlay.exportPoster(app.root) }
+    val command = exe?.let { com.emustation.emusync.desktop.platform.RemotePlay.command(it) }
+    val localAddresses = remember { com.emustation.emusync.desktop.platform.RemotePlay.localAddresses() }
+    var user by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    val scope = rememberCoroutineScope()
+    PanelScaffold("リモートプレイ（Sunshine・Moonlight）", onClose) {
+        Note("Android などの Moonlight から、この PC の EmuStation を遊べます。Moonlight で「EmuStation」を選ぶと全画面の EmuStation が映り、" +
+            "手元のコントローラーでゲームを選んで遊べます（セーブの同期はこの PC の EmuStation が今までどおり行います）")
+
+        Label("1. この PC に Sunshine を入れる")
+        Note("Sunshine は、この PC の画面をスマホなどに送る無料のアプリです。入れたら、設定画面でユーザー名とパスワードを決めます")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { Pickers.browse("https://app.lizardbyte.dev/Sunshine/") }, modifier = Modifier.focusRing()) { Text("Sunshine のページを開く") }
+            OutlinedButton(onClick = { Pickers.browse(com.emustation.emusync.desktop.platform.SunshineClient.DEFAULT_URL) }, modifier = Modifier.focusRing()) { Text("Sunshine の設定画面を開く") }
+        }
+
+        Label("2. Sunshine に EmuStation を登録する")
+        if (command == null) {
+            Note("インストールした EmuStation で行ってください（開発中の実行では登録できません）", XmbText.warn)
+        } else {
+            Note("Sunshine の設定画面のユーザー名とパスワードを入れて「登録する」を押します（パスワードは保存しません）")
+            Field(user, { user = it }, "Sunshine のユーザー名", tag = "sunshine-user")
+            Field(password, { password = it }, "Sunshine のパスワード", password = true, tag = "sunshine-password")
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = {
+                        busy = true
+                        message = null
+                        scope.launch {
+                            val r = withContext(Dispatchers.IO) {
+                                com.emustation.emusync.desktop.platform.SunshineClient(user = user, password = password)
+                                    .register(command, poster?.path)
+                            }
+                            message = when (r) {
+                                is com.emustation.emusync.desktop.platform.SunshineClient.Result.Added ->
+                                    true to (if (r.updated) "登録を新しくしました" else "登録しました") + "。Moonlight のアプリ一覧に「EmuStation」が出ます"
+                                com.emustation.emusync.desktop.platform.SunshineClient.Result.BadLogin -> false to "ユーザー名かパスワードが違います"
+                                com.emustation.emusync.desktop.platform.SunshineClient.Result.NotRunning -> false to "Sunshine が動いていません（入れて起動してから、もう一度押してください）"
+                                is com.emustation.emusync.desktop.platform.SunshineClient.Result.Failed -> false to r.message
+                            }
+                            busy = false
+                        }
+                    },
+                    enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
+                    modifier = Modifier.focusRing().testTag("sunshine-register"),
+                ) { Text(if (busy) "登録しています…" else "登録する") }
+                message?.let { (ok, text) -> Text(text, color = if (ok) XmbText.ok else XmbText.error, fontSize = 13.sp) }
+            }
+            Note("自分で登録するときは、Sunshine の「Applications」→「Add New」で、名前を EmuStation、コマンドを次のようにします：")
+            SelectionContainer { Text(command, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }
+            poster?.let { f ->
+                Note("画像（Image）：")
+                SelectionContainer { Text(f.path, color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }
+            }
+        }
+
+        Label("3. Android に Moonlight を入れて、この PC とペアリングする")
+        Note("同じ Wi-Fi で Moonlight を開くと、この PC が出ます。選ぶと 4 桁の PIN が出るので、Sunshine の設定画面の「PIN」に入れます。" +
+            "Android の EmuStation のメニュー「リモートプレイ」からも Moonlight を開けます")
+
+        Label("4. 家の外から遊ぶ（WireGuard）")
+        Note("Android の WireGuard で自宅のネットワークにつないでから、Moonlight の「＋」で、この PC の自宅での IP アドレスを入れます" +
+            "（家の中と同じアドレスでつながります）。ペアリングは家の中で済ませておきます")
+        localAddresses.takeIf { it.isNotEmpty() }?.let { ips ->
+            Note("この PC の IP アドレス：")
+            SelectionContainer { Text(ips.joinToString("　"), color = XmbText.secondary, fontSize = 13.sp, fontFamily = FontFamily.Monospace) }
+        }
+        Note("WireGuard のサーバー（ルーターや自宅のサーバー）の AllowedIPs に、自宅のネットワーク（例 192.168.50.0/24）を含めてください。" +
+            "セーブの同期のサーバーも同じアドレスのまま、家の外から使えます")
+        Note("モバイル回線で映像が乱れるときは、Moonlight の設定でビットレートを下げます（10〜20 Mbps）")
+
+        Label("遊び方")
+        Note("Moonlight で「EmuStation」を選ぶ → コントローラーでゲームを選んで遊ぶ → ゲームを終える（エミュの画面で Alt+F4 か、プレイ中の画面の「エミュを終了」）" +
+            " → セーブが自動で送られる → 遊び終わったら Moonlight で「アプリを終了」")
     }
 }
 

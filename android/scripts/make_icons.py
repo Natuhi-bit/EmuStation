@@ -152,7 +152,31 @@ def full_icon(size: int, rounded: bool = True) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 
+def poster(w: int = 600, h: int = 800) -> Image.Image:
+    """リモートプレイ（Moonlight）のアプリ一覧に出す縦長の絵：背景にコントローラーと「EmuStation」"""
+    from PIL import ImageFont
+    big = max(w, h)
+    bg = background(big).crop(((big - w) // 2, 0, (big - w) // 2 + w, h))
+    art = foreground(S, 0.9).resize((int(w * 0.92), int(w * 0.92)), Image.LANCZOS)
+    bg.alpha_composite(art, ((w - art.width) // 2, int(h * 0.12)))
+    d = ImageDraw.Draw(bg)
+    font = None
+    for f in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"):
+        if Path(f).exists():
+            font = ImageFont.truetype(f, int(w * 0.11))
+            break
+    if font is not None:
+        text = "EmuStation"
+        tw = d.textlength(text, font=font)
+        y = int(h * 0.76)
+        d.text(((w - tw) / 2, y + 4), text, font=font, fill=(0, 0, 30, 150))
+        d.text(((w - tw) / 2, y), text, font=font, fill=(255, 255, 255, 255))
+    return bg
+
+
 def main():
+    # ---- リモートプレイ（Moonlight）のポスター
+    poster().convert("RGB").save(ROOT / "desktop/src/main/resources/poster.png", optimize=True)
     # ---- Windows
     full = full_icon(1024)
     full.resize((512, 512), Image.LANCZOS).save(ROOT / "desktop/src/main/resources/icon.png")

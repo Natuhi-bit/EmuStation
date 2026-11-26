@@ -30,6 +30,7 @@ import com.emustation.emusync.desktop.platform.PadKeys
 import com.emustation.emusync.desktop.platform.PadRepeater
 import com.emustation.emusync.desktop.platform.PadSource
 import com.emustation.emusync.desktop.platform.PadState
+import com.emustation.emusync.desktop.platform.RemotePlay
 import com.emustation.emusync.desktop.platform.RunningEmulator
 import com.emustation.emusync.desktop.platform.SdlSource
 import com.emustation.emusync.desktop.platform.SingleInstance
@@ -49,8 +50,12 @@ import org.jetbrains.skia.Image
  */
 fun main(args: Array<String>) {
     val showRequests = MutableStateFlow(0)
+    // リモートプレイ（Sunshine から --remote で起動）：全画面で前に出す
+    val remote = RemotePlay.ARG in args
+    val fullscreenRequests = MutableStateFlow(if (remote) 1 else 0)
     val single = SingleInstance()
-    if (!single.acquire { showRequests.value++ }) return // 2つ目は、1つ目を前に出して終わる
+    // 2つ目は、1つ目を前に出して終わる
+    if (!single.acquire(remote) { r -> if (r) fullscreenRequests.value++; showRequests.value++ }) return
 
     val app = AppController()
     // 操作音（利用者が選んだ音のファイル）
@@ -115,6 +120,14 @@ fun main(args: Array<String>) {
         val windowState = rememberWindowState(width = 1280.dp, height = 760.dp)
         val reopen by showRequests.collectAsState()
         LaunchedEffect(reopen) { if (reopen > 0) visible = true }
+        // リモートプレイ：全画面にして前に出す（Moonlight の画面いっぱいに XMB を出す）
+        val fullscreen by fullscreenRequests.collectAsState()
+        LaunchedEffect(fullscreen) {
+            if (fullscreen > 0) {
+                visible = true
+                windowState.placement = WindowPlacement.Fullscreen
+            }
+        }
         LaunchedEffect(Unit) {
             app.notices.collect { n ->
                 tray.sendNotification(Notification(n.title, n.text, if (n.error) Notification.Type.Warning else Notification.Type.Info))
@@ -148,7 +161,15 @@ fun main(args: Array<String>) {
                 } else false
             },
         ) {
-            LaunchedEffect(visible, reopen) { if (visible) window.toFront() }
+            LaunchedEffect(visible, reopen) {
+                if (visible) {
+                    // ほかの窓（Sunshine から起動したときなど）の後ろに隠れないように、いったん最前面にしてから戻す
+                    window.isAlwaysOnTop = true
+                    window.toFront()
+                    window.requestFocus()
+                    window.isAlwaysOnTop = false
+                }
+            }
             // コントローラーのボタンを送る先（このウィンドウ）
             DisposableEffect(window) {
                 padTarget.set(window)

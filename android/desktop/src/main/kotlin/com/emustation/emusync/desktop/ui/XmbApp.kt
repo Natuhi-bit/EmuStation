@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
@@ -128,6 +129,10 @@ fun buildCategories(
                 "sounds", "操作音",
                 if (!c.sounds) "鳴らさない" else "音の大きさ ${c.soundVolume}",
                 Icons.Filled.VolumeUp, onActivate = { open(Panel.Sounds) },
+            ),
+            XmbItem(
+                "remote", "リモートプレイ", "Moonlight（Android など）から、家の外でもこの PC で遊ぶ（Sunshine）",
+                Icons.Filled.CastConnected, onActivate = { open(Panel.RemotePlay) },
             ),
             XmbItem("startup", "起動と常駐", "Windows の起動時に起動・タスクトレイ・定期送信", Icons.Filled.PowerSettingsNew, onActivate = { open(Panel.Startup) }),
             XmbItem("theme", "テーマ", XmbThemes.byName(c.themeColor).label, Icons.Filled.Brush, onActivate = { open(Panel.Theme) }),
@@ -321,6 +326,7 @@ fun XmbApp(app: AppController, initialCategory: Int? = null, now: (() -> Long)? 
                 Panel.Startup -> StartupPanel(app, close)
                 Panel.Controller -> ControllerPanel(app, close)
                 Panel.Sounds -> SoundsPanel(app, close)
+                Panel.RemotePlay -> RemotePlayPanel(app, close)
                 Panel.Theme -> ThemePanel(app, close)
                 Panel.About -> AboutPanel(app, close)
                 is Panel.EditGame -> EditGamePanel(app, p.gameId, p.target, close)

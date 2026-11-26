@@ -154,6 +154,13 @@ sudo -u emusync EMUSYNC_DATA=/var/lib/emusync /opt/emusync/venv/bin/python app.p
 - **Alt+F4 でエミュを終了**：エミュの画面で Alt+F4 を押すと、エミュ全体（子プロセスも）を終わらせて、セーブの送信へ進む
   （PCSX2・RPCS3 は Alt+F4 でゲームの画面だけ閉じて本体が残ることがあるため）。まず窓を閉じるよう頼み、8 秒たっても残っていれば強制終了。
   プレイ中の画面の「エミュを終了」でも同じ
+- **リモートプレイ（Sunshine＋Moonlight）**：Android などの Moonlight から、この PC の EmuStation を遊ぶ。
+  「設定」→「リモートプレイ」で、Sunshine の設定画面のユーザー名・パスワードを入れて「登録する」を押すと、Sunshine に
+  「EmuStation」が登録される（コマンド `"…\EmuStation.exe" --remote`、Moonlight に出す絵付き）。Moonlight で「EmuStation」を選ぶと、
+  全画面の EmuStation（起動中ならそれを全画面にする）が映り、手元のコントローラーでゲームを選んで遊べる。セーブの同期は PC の EmuStation が行う。
+  家の外からは、Android の WireGuard で自宅のネットワークにつなぎ、Moonlight の「＋」で PC の自宅での IP アドレスを入れる
+  （ペアリングは家の中で済ませておく。WireGuard の AllowedIPs に自宅のネットワークを含める。同期のサーバーも同じアドレスのまま使える）。
+  Android 版のメニュー「リモートプレイ（Moonlight）」から、案内と Moonlight・WireGuard を開ける
 - **PS3 の XMB 風の画面**：カテゴリー（設定・PS2・PSP・PS Vita・PS3・セーブデータ・ネットワーク）を横、項目を縦に並べる。
   ゲームはハードごとの列に分かれる（ゲームもエミュもないハードの列は出さない）。
   キーボード（←→↑↓・Enter・Tab でオプション・Esc）とマウスで操作する。F11 で全画面。背景の色はテーマで変えられる

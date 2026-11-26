@@ -86,6 +86,24 @@ class HomeScreenTest {
     }
 
     @Test
+    fun remotePlay_opensGuideAndMoonlight() {
+        show(HomeUiState(loaded = true, server = ServerState.Connected("p"), rows = emptyList()))   // 上のメニューだけにする
+        compose.onNodeWithContentDescription("メニュー").performClick()
+        compose.onNodeWithTag("menu-remote-play").performClick()
+        compose.onNodeWithTag("remote-play-dialog").assertIsDisplayed()
+        // Moonlight・WireGuard は入っていないので「入れる」（Google Play を開く）
+        compose.onNodeWithText("Moonlight を入れる").assertIsDisplayed()
+        compose.onNodeWithText("WireGuard を入れる").assertExists()
+        compose.onRoot(useUnmergedTree = true).saveScreenshot("home-remote-play")
+        compose.onNodeWithTag("open-moonlight").performClick()
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val started = org.robolectric.Shadows.shadowOf(app).nextStartedActivity
+        assertEquals(android.content.Intent.ACTION_VIEW, started.action)
+        assertEquals("market://details?id=com.limelight", started.dataString)
+        compose.onNodeWithTag("remote-play-dialog").assertDoesNotExist()
+    }
+
+    @Test
     fun rowMenu_callsActions() {
         show(HomeUiState(loaded = true, server = ServerState.Connected("p"), rows = rows))
         compose.onNodeWithTag("menu-psp").performClick()
