@@ -95,18 +95,22 @@ class LauncherAndConfigTest {
     @Test
     fun emulatorEnvironment_dropsOwnRuntimeFromPath() {
         // EmuStation 自身のフォルダは、エミュに渡す PATH から外す（RPCS3 が msvcp140.dll を読み違える）
-        val own = listOf(java.io.File("/opt/emusync/runtime"), java.io.File("/opt/emusync"))
+        val base = java.io.File(System.getProperty("java.io.tmpdir")).absoluteFile
+        fun p(vararg parts: String) = parts.fold(base) { f, s -> java.io.File(f, s) }.path
+        val sep = if (com.emustation.emusync.desktop.platform.isWindows) ";" else ":"
+        val own = listOf(java.io.File(p("emusync", "runtime")), java.io.File(p("emusync")))
         val env = mutableMapOf(
-            "PATH" to "/opt/emusync/runtime/bin:/usr/bin:/opt/emusync:/opt/emusync-other/bin::/opt/emusync/runtime/bin/server",
+            "PATH" to listOf(p("emusync", "runtime", "bin"), p("usr", "bin"), p("emusync"), p("emusync-other", "bin"), "",
+                p("emusync", "runtime", "bin", "server")).joinToString(sep),
             "HOME" to "/home/u",
         )
         com.emustation.emusync.desktop.platform.Launcher.cleanEnvironment(env, own)
-        assertEquals("/usr/bin:/opt/emusync-other/bin", env["PATH"])
+        assertEquals(listOf(p("usr", "bin"), p("emusync-other", "bin")).joinToString(sep), env["PATH"])
         assertEquals("/home/u", env["HOME"])
         // Windows の "Path" のような書き方でも
-        val env2 = mutableMapOf("Path" to "/opt/emusync/runtime/bin:/bin")
+        val env2 = mutableMapOf("Path" to listOf(p("emusync", "runtime", "bin"), p("bin")).joinToString(sep))
         com.emustation.emusync.desktop.platform.Launcher.cleanEnvironment(env2, own)
-        assertEquals("/bin", env2["Path"])
+        assertEquals(p("bin"), env2["Path"])
     }
 
     @Test
