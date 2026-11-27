@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- リモートプレイ（PC の EmuStation を Moonlight で遊ぶ） -->
+<resources>
+    <string name="remote_play_title">リモートプレイ</string>
+    <string name="remote_play_menu">リモートプレイ（Moonlight）</string>
+    <string name="remote_play_intro">PC の EmuStation を、この端末の Moonlight で遊べます。Moonlight で PC を選び、「EmuStation」を開くと PS3 風の画面が映ります。コントローラーでゲームを選んで遊んでください（セーブの同期は PC の EmuStation が行います）</string>
+    <string name="remote_play_step_pc">1. PC：Sunshine を入れて、Windows 版 EmuStation の「設定」→「リモートプレイ」で登録する</string>
+    <string name="remote_play_step_pair">2. この端末：Moonlight を入れて、同じ Wi-Fi で PC を選ぶ。出てきた 4 桁の PIN を、PC の Sunshine の設定画面の「PIN」に入れる</string>
+    <string name="remote_play_step_outside">3. 家の外から：WireGuard で自宅のネットワークにつないでから、Moonlight の「＋」で PC の自宅での IP アドレス（192.168. などで始まる）を入れる。モバイル回線で映像が乱れるときは、Moonlight の設定でビットレートを下げる（10〜20 Mbps）</string>
+    <string name="remote_play_open_moonlight">Moonlight を開く</string>
+    <string name="remote_play_get_moonlight">Moonlight を入れる</string>
+    <string name="remote_play_open_wireguard">WireGuard を開く</string>
+    <string name="remote_play_get_wireguard">WireGuard を入れる</string>
+</resources>

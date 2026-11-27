@@ -23,10 +23,13 @@ import sys
 import time
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 
 DATA_DIR = Path(os.environ.get("EMUSYNC_DATA", "./data")).resolve()
 BLOB_DIR = DATA_DIR / "blobs"
@@ -34,8 +37,13 @@ DB_PATH = DATA_DIR / "emusync.db"
 MAX_BYTES = int(os.environ.get("EMUSYNC_MAX_BYTES", str(256 * 1024 * 1024)))
 KEEP_VERSIONS = int(os.environ.get("EMUSYNC_KEEP_VERSIONS", "30"))  # パスごとの履歴保持数
 
-# パス: "ppsspp/SAVEDATA/ULJM05800/DATA.BIN" のような相対パスのみ許可
-PATH_RE = re.compile(r"^[^/\\\x00][^\\\x00]*$")
+# パス: "ppsspp/SAVEDATA/ULJM05800/DATA.BIN" のような相対パスのみ許可。
+# 制御文字（改行など）は使えない。改行を含むパスは保存できても、URL の経路に合わず読み出せなくなる
+PATH_RE = re.compile(r"[^/\\\x00-\x1f\x7f][^\\\x00-\x1f\x7f]*")
+
+# 版番号は SQLite の整数に入る範囲だけ受け付ける（範囲外は 422。以前は 500 になっていた）
+SqlInt = Annotated[int, Field(ge=-(2 ** 63), le=2 ** 63 - 1)]
+LOCK_TTL_MAX = 366 * 24 * 3600
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices (
@@ -92,7 +100,7 @@ def blob_path(sha: str) -> Path:
 
 def check_path(path: str) -> str:
     parts = path.split("/")
-    if not PATH_RE.match(path) or any(p in ("", ".", "..") for p in parts):
+    if not PATH_RE.fullmatch(path) or any(p in ("", ".", "..") for p in parts):
         raise HTTPException(400, f"不正なパス: {path}")
     return path
 
@@ -121,10 +129,29 @@ def current_device(authorization: str = Header(default="")) -> str:
 @asynccontextmanager
 async def lifespan(_app):
     init_storage()
+    # 毎日の二次バックアップ（設定した時刻を過ぎたら 1 日 1 回）。テストでは EMUSYNC_NO_SCHEDULER=1 で止める
+    if os.environ.get("EMUSYNC_NO_SCHEDULER") != "1":
+        ADMIN.backup.start_scheduler()
     yield
+    ADMIN.backup.stop_scheduler()
 
 
 app = FastAPI(title="emusync", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, exc: RequestValidationError):
+    """
+    入力の誤り（422）。FastAPI の既定の処理は、JSON でない本文（バイナリ）が来ると
+    エラーの中の本文を文字列にできず 500 になるので、文字列に直してから返す
+    """
+    errors = []
+    for e in exc.errors():
+        e = dict(e)
+        if isinstance(e.get("input"), (bytes, bytearray)):
+            e["input"] = bytes(e["input"][:200]).decode("utf-8", "replace")
+        errors.append(e)
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 
 @app.get("/api/ping")
@@ -145,7 +172,11 @@ def manifest(prefix: str = "", device: str = Depends(current_device)):
 
 
 @app.get("/api/files/{path:path}")
-def get_file(path: str, version: int | None = None, device: str = Depends(current_device)):
+def get_file(
+    path: str,
+    version: Annotated[int | None, Query(ge=-(2 ** 63), le=2 ** 63 - 1)] = None,
+    device: str = Depends(current_device),
+):
     check_path(path)
     with db() as conn:
         if version is None:
@@ -183,14 +214,29 @@ async def put_file(
     sha = hashlib.sha256(body).hexdigest()
     if sha != x_sha256.lower():
         raise HTTPException(400, "転送中に内容が壊れました（ハッシュ不一致）")
+    return put_version(path, body, device, base_version)
 
-    # 先に実体を書く（同じ内容なら既にある）
+
+def write_blob(data: bytes) -> str:
+    """実体を SHA-256 の名前で書く（同じ内容なら既にある）。返り値は SHA-256"""
+    sha = hashlib.sha256(data).hexdigest()
     bp = blob_path(sha)
     if not bp.exists():
         bp.parent.mkdir(parents=True, exist_ok=True)
         tmp = bp.with_suffix(".tmp" + secrets.token_hex(4))
-        tmp.write_bytes(body)
+        tmp.write_bytes(data)
         os.replace(tmp, bp)
+    return sha
+
+
+def put_version(path: str, data: bytes, device: str, base_version: int | None) -> dict:
+    """
+    新しい版を作る。内容が今の版と同じなら版を進めない（unchanged）。
+    base_version を指定すると楽観ロック（今の版と違えば 409）。None なら確かめない（管理画面のインポート用）
+    """
+    # 先に実体を書く（同じ内容なら既にある）
+    sha = write_blob(data)
+    body = data
 
     now = time.time()
     with db() as conn:
@@ -198,7 +244,7 @@ async def put_file(
         try:
             row = conn.execute("SELECT version, sha256 FROM files WHERE path=?", (path,)).fetchone()
             current = row["version"] if row else 0
-            if current != base_version:
+            if base_version is not None and current != base_version:
                 conn.execute("ROLLBACK")
                 raise HTTPException(
                     409,
@@ -247,13 +293,19 @@ def history(path: str, device: str = Depends(current_device)):
 
 
 class RestoreReq(BaseModel):
-    version: int
+    version: SqlInt
 
 
 @app.post("/api/restore/{path:path}")
 def restore(path: str, req: RestoreReq, device: str = Depends(current_device)):
     """過去の版の内容を「新しい版」として最新にする（履歴は消さない）"""
     check_path(path)
+    return restore_version(path, req.version, device)
+
+
+def restore_version(path: str, version: int, device: str) -> dict:
+    """版 version の内容を新しい版として最新にする。記録する端末名は「<device>(restore v<版>)」"""
+    req = RestoreReq(version=version)
     now = time.time()
     with db() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -279,7 +331,7 @@ def restore(path: str, req: RestoreReq, device: str = Depends(current_device)):
 
 # ------------------------------------------------ プレイ中ロック
 class LockReq(BaseModel):
-    ttl: int = 6 * 3600  # 秒。プレイ時間より長めに
+    ttl: int = Field(6 * 3600, ge=1, le=LOCK_TTL_MAX)  # 秒。プレイ時間より長めに
     force: bool = False
 
 
@@ -323,16 +375,22 @@ def list_locks(device: str = Depends(current_device)):
 
 
 # ---------------------------------------------------------------- 管理コマンド
+def register_device(name: str) -> str:
+    """端末を登録（同じ名前なら置き換え）して、新しいトークンを返す。トークンは保存しない（ハッシュだけ）"""
+    token = secrets.token_urlsafe(32)
+    with db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO devices VALUES(?,?,?)",
+            (name, hashlib.sha256(token.encode()).hexdigest(), time.time()),
+        )
+    return token
+
+
 def _cli() -> None:
     init_storage()
     if len(sys.argv) >= 3 and sys.argv[1] == "add-device":
         name = sys.argv[2]
-        token = secrets.token_urlsafe(32)
-        with db() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO devices VALUES(?,?,?)",
-                (name, hashlib.sha256(token.encode()).hexdigest(), time.time()),
-            )
+        token = register_device(name)
         print(f"端末 '{name}' を登録しました。このトークンをクライアント設定に書いてください（再表示できません）:")
         print(token)
     elif len(sys.argv) >= 3 and sys.argv[1] == "remove-device":
@@ -343,8 +401,80 @@ def _cli() -> None:
         with db() as conn:
             for r in conn.execute("SELECT name, created_at FROM devices"):
                 print(r["name"], time.strftime("%Y-%m-%d %H:%M", time.localtime(r["created_at"])))
+    elif len(sys.argv) >= 2 and sys.argv[1] == "set-admin-password":
+        import getpass
+        pw = getpass.getpass("管理画面のパスワード（8文字以上）: ")
+        if len(pw) < 8:
+            sys.exit("8文字以上にしてください")
+        if getpass.getpass("もう一度: ") != pw:
+            sys.exit("一致しません")
+        ADMIN.set_admin_password(pw)
+        print("設定しました。ブラウザで https://<サーバー>/emusync/admin/ を開いてください")
+    elif len(sys.argv) >= 2 and sys.argv[1] == "backup":
+        # 今すぐバックアップ（--force：変わっていなくても世代を作る）
+        for name, r in ADMIN.backup.run(force="--force" in sys.argv).items():
+            print(name, r)
+    elif len(sys.argv) >= 2 and sys.argv[1] == "restore-backup":
+        _cli_restore(sys.argv[2:])
     else:
-        print("使い方: python3 app.py add-device <名前> | remove-device <名前> | list-devices")
+        print("使い方: python3 app.py add-device <名前> | remove-device <名前> | list-devices | set-admin-password\n"
+              "                     | backup [--force] | restore-backup（--help で説明）")
+
+
+def _cli_restore(args: list[str]) -> None:
+    """
+    サーバーを失ったときに、バックアップから全体を戻す（新しく入れたサーバーでも使える）。
+      --dir <フォルダ>                      別のディスク（例 /mnt/backup/emusync-backup）
+      --webdav <URL> --user <ユーザー>       Nextcloud（パスワードは聞く）。--insecure で証明書を確かめない
+      --zip <ファイル>                       管理画面でダウンロードした zip
+      --list                                世代の一覧を出すだけ
+      --snapshot <ID>                       戻す世代（省くと最新）
+    """
+    import argparse
+    import backup as bk
+    p = argparse.ArgumentParser(prog="app.py restore-backup", description=_cli_restore.__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--dir")
+    g.add_argument("--webdav")
+    g.add_argument("--zip")
+    p.add_argument("--user")
+    p.add_argument("--insecure", action="store_true")
+    p.add_argument("--snapshot")
+    p.add_argument("--list", action="store_true")
+    a = p.parse_args(args)
+    if a.dir:
+        src = bk.LocalDest(a.dir)
+    elif a.zip:
+        src = bk.ZipSource(a.zip)
+    else:
+        import getpass
+        if not a.user:
+            sys.exit("--user が必要です")
+        src = bk.WebDavDest(a.webdav, a.user, getpass.getpass("Nextcloud のアプリパスワード: "), not a.insecure)
+    snaps = ADMIN.backup.snapshots(src)
+    if not snaps:
+        sys.exit("世代が見つかりません")
+    if a.list:
+        for s in snaps:
+            print(s["id"], time.strftime("%Y-%m-%d %H:%M", time.localtime(s["created_at"])), f'{s["files"]} ファイル', ",".join(s["targets"]))
+        return
+    sid = a.snapshot or snaps[0]["id"]
+    print(f"{sid} の状態に、サーバー全体を戻します（今の DB は pre-restore-*.db に残します）")
+    if input("よろしいですか？ [y/N] ").strip().lower() != "y":
+        sys.exit("やめました")
+    print(ADMIN.backup.restore_all(src, sid))
+
+
+# ---------------------------------------------------------------- 管理画面（/admin/）
+import admin as _admin  # noqa: E402
+
+ADMIN = _admin.Core(
+    db=db, data_dir=DATA_DIR, blob_path=blob_path, check_path=check_path, check_target=check_target,
+    put_version=put_version, restore_version=restore_version, register_device=register_device,
+    max_bytes=MAX_BYTES,
+)
+app.include_router(_admin.build_router(ADMIN))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 共通 -->
+    <string name="cd_back">戻る</string>
+    <string name="cd_menu">メニュー</string>
+    <string name="action_back">戻る</string>
+    <string name="action_close">閉じる</string>
+    <string name="action_choose">選ぶ</string>
+    <string name="action_unset">未設定にする</string>
+
+    <!-- ホーム -->
+    <string name="action_sync_all">すべて同期</string>
+    <string name="action_add_target">ターゲットを追加</string>
+    <string name="action_sync_now">今すぐ同期</string>
+    <string name="action_pull_only">取得のみ</string>
+    <string name="action_push_only">送信のみ</string>
+    <string name="action_preview">プレビュー（dry-run）</string>
+    <string name="action_edit">編集</string>
+    <string name="server_checking">サーバーに接続しています…</string>
+    <string name="server_connected">サーバーに接続しました（この端末: %1$s）</string>
+    <string name="server_not_configured">サーバーが設定されていません</string>
+    <string name="banner_all_files">セーブフォルダを読み書きするため、「すべてのファイルへのアクセス」を許可してください</string>
+    <string name="banner_notifications">同期とプレイ中の表示に通知を使います。通知を許可してください</string>
+    <string name="home_empty">ターゲットがありません。右下の ＋ から追加してください</string>
+    <string name="emu_not_set">エミュ: 未設定</string>
+    <string name="emu_missing">エミュがアンインストールされています</string>
+    <string name="last_sync">最後の同期: %1$s</string>
+    <string name="last_sync_never">まだ同期していません</string>
+
+    <!-- 状態 -->
+    <string name="status_synced">同期済み</string>
+    <string name="status_unsent">未送信の変更あり（%1$d 件）</string>
+    <string name="status_never_synced">未同期</string>
+    <string name="status_conflicts">競合 %1$d 件</string>
+    <string name="status_playing_elsewhere">%1$s がプレイ中</string>
+    <string name="status_playing_here">この端末でプレイ中</string>
+    <string name="status_data_dir_missing">データフォルダが見つかりません</string>
+    <string name="status_no_permission">ファイルへのアクセスが未許可</string>
+    <string name="status_scan_failed">フォルダを読めません</string>
+    <string name="status_disabled">無効</string>
+    <string name="status_syncing">同期中</string>
+
+    <!-- 同期の結果 -->
+    <string name="sum_uploaded">送信 %1$d</string>
+    <string name="sum_downloaded">取得 %1$d</string>
+    <string name="sum_conflicts">競合 %1$d</string>
+    <string name="sum_errors">失敗 %1$d</string>
+    <string name="sum_nothing">変更なし</string>
+    <string name="msg_sync_finished">%1$s: %2$s</string>
+    <string name="msg_sync_failed">%1$s: 同期できませんでした。%2$s</string>
+    <string name="msg_no_enabled_targets">有効なターゲットがありません</string>
+    <string name="preview_title">%1$s のプレビュー</string>
+    <string name="preview_running">サーバーの一覧を取得しています…</string>
+    <string name="preview_conflict_note">競合のファイルは、同期しても上書きしません。サーバー版を保存して知らせます</string>
+
+    <!-- 同期全体の失敗 -->
+    <string name="err_server_not_configured">サーバーが設定されていません。設定画面で URL とトークンを入力してください</string>
+    <string name="err_no_storage_access">「すべてのファイルへのアクセス」が許可されていません</string>
+    <string name="err_data_dir_missing">データフォルダが見つかりません: %1$s</string>
+    <string name="err_target_missing">ターゲット %1$s がありません</string>
+
+    <!-- モード -->
+    <string name="mode_sync">同期</string>
+    <string name="mode_pull">取得のみ</string>
+    <string name="mode_push">送信のみ</string>
+    <string name="mode_dry_run">プレビュー</string>
+    <string name="prefer_local">手元を残す</string>
+    <string name="prefer_remote">サーバー版を使う</string>
+
+    <!-- 通知 -->
+    <string name="channel_sync">同期</string>
+    <string name="notif_syncing">%1$s を同期しています</string>
+
+    <!-- ターゲットの編集 -->
+    <string name="target_add_title">ターゲットを追加</string>
+    <string name="target_edit_title">ターゲットを編集</string>
+    <string name="label_preset">機種</string>
+    <string name="preset_custom">自由入力</string>
+    <string name="preset_hint">%1$s（%2$s）。データフォルダの例: %3$s</string>
+    <string name="label_target_name">ターゲット名</string>
+    <string name="hint_target_name">サーバー上のフォルダ名。Windows 側と同じ名前にします（英数字と . _ - のみ）</string>
+    <string name="label_emulator">エミュのアプリ</string>
+    <string name="app_picker_title">エミュのアプリを選ぶ</string>
+    <string name="app_picker_search">検索</string>
+    <string name="label_data_dir">エミュのデータフォルダ</string>
+    <string name="action_pick_folder">フォルダを選ぶ</string>
+    <string name="label_rel_subdir">同期するフォルダ（データフォルダからの相対パス）</string>
+    <string name="hint_rel_subdir">空ならデータフォルダ全体</string>
+    <string name="label_sync_dir">同期するフォルダ</string>
+    <string name="label_excludes">除外パターン</string>
+    <string name="hint_excludes">1行に1つ。例 *.bak（相対パス全体とファイル名の両方に照合します）</string>
+    <string name="label_enabled">有効</string>
+    <string name="hint_enabled">無効にすると「すべて同期」の対象から外します</string>
+    <string name="action_check_and_save">確認して保存</string>
+    <string name="warn_android_data">Android/data の中は、他のアプリから読めません。エミュの設定でデータフォルダを移してください</string>
+    <string name="warn_data_dir_missing">データフォルダが見つかりません（「すべてのファイルへのアクセス」が未許可の場合も、こう表示されます）</string>
+    <string name="warn_sync_dir_missing">同期するフォルダはまだありません。エミュでセーブするか、取得すると作られます</string>
+    <string name="err_target_name_empty">ターゲット名を入力してください</string>
+    <string name="err_target_name_chars">英数字と . _ - だけが使えます</string>
+    <string name="err_target_name_dup">同じ名前のターゲットがあります</string>
+    <string name="err_data_dir_empty">データフォルダを入力するか、選んでください</string>
+    <string name="err_data_dir_absolute">/ で始まる実パスを入力してください</string>
+    <string name="err_rel_subdir">. や .. は使えません</string>
+    <string name="err_tree_uri">このフォルダは実パスに変換できません。手入力してください</string>
+    <string name="save_check_title">この設定で同期すると</string>
+    <string name="save_check_header">初めての同期で手元やサーバーを壊さないように、予定される操作を確認してください（まだ何も変えていません）</string>
+    <string name="save_check_failed_note">確認できませんでしたが、設定は保存できます</string>
+    <string name="target_delete_title">%1$s を削除しますか？</string>
+    <string name="target_delete_message">このアプリの設定と同期の記録を消します。手元のファイルとサーバー上のファイルは消えません</string>
+
+    <!-- 同期ログ -->
+    <string name="sync_log_title">同期ログ</string>
+    <string name="sync_log_hint">直近 100 回の同期の結果</string>
+    <string name="sync_log_empty">まだ同期していません</string>
+    <string name="action_open_log">同期ログを見る</string>
+
+    <!-- 遊ぶ（設計書 §5） -->
+    <string name="action_play">遊ぶ</string>
+    <string name="action_finish_play">送信して終了</string>
+    <string name="action_play_force">奪って起動</string>
+    <string name="action_play_offline">同期せずに起動</string>
+    <string name="action_play_ignore_conflicts">無視して起動</string>
+    <string name="action_stop">やめる</string>
+    <string name="action_send">送信</string>
+    <string name="action_keep_playing">まだ遊ぶ</string>
+    <string name="action_retry">再試行</string>
+    <string name="play_title">%1$s を起動します</string>
+    <string name="play_step_finishing">前回のプレイの送信を終えています…</string>
+    <string name="play_step_locking">ロックを取得しています…</string>
+    <string name="play_step_syncing">セーブを同期しています…</string>
+    <string name="play_locked_title">%1$s がプレイ中</string>
+    <string name="play_locked_text">%1$s が %2$s をプレイ中です（ロックの期限: %3$s）。向こうで終わってから起動してください。奪って起動すると、向こうのセーブと競合するおそれがあります</string>
+    <string name="play_unreachable_title">サーバーにつながりません</string>
+    <string name="play_unreachable_text">VPN（WireGuard）を確認してください。同期せずに起動しますか？ 遊び終わったら、つながるときに送信します</string>
+    <string name="play_conflicts_title">競合が %1$d 件あります</string>
+    <string name="play_conflicts_text">手元とサーバーの両方で変わったファイルがあるので、起動を止めました。何も上書きしていません。無視して起動すると、手元のセーブで遊びます</string>
+    <string name="play_error_title">%1$s を起動できません</string>
+    <string name="resume_title">%1$s のセーブを送信しますか？</string>
+    <string name="resume_text">%1$s からプレイ中です。エミュを終了してから送信してください（エミュが動いたままだと、セーブを書き込み中かもしれません）</string>
+    <string name="resume_text_offline">%1$s から、同期せずにプレイ中です。エミュを終了してから送信してください（エミュが動いたままだと、セーブを書き込み中かもしれません）</string>
+    <string name="err_emu_not_set">エミュのアプリが設定されていません。ターゲットの編集で選んでください</string>
+    <string name="err_emu_missing">エミュのアプリが見つかりません（アンインストールされた可能性があります）</string>
+    <string name="err_previous_finish_failed">前回のプレイのセーブを送信できませんでした。%1$s</string>
+    <string name="err_some_files_failed">%1$d 件のファイルを送信できませんでした。同期ログを確認してください</string>
+    <string name="err_playing_no_pull">この端末でプレイ中のため、取得しません。エミュを終了して「送信して終了」を押してください</string>
+    <string name="channel_play">プレイ中</string>
+    <string name="channel_result">送信の結果</string>
+    <string name="notif_playing">%1$s プレイ中</string>
+    <string name="notif_playing_text">遊び終わったら、エミュを終了してから [送信して終了] を押してください</string>
+    <string name="notif_playing_offline_text">同期せずに起動しました。遊び終わったら、エミュを終了してから [送信して終了] を押してください（サーバーにつながるときに送信します）</string>
+    <string name="notif_finishing">%1$s のセーブを送信しています</string>
+    <string name="notif_finished">%1$s: 送信しました</string>
+    <string name="notif_finished_conflicts">%1$s: 競合が %2$d 件あります</string>
+    <string name="notif_finished_conflicts_text">%1$s。競合のファイルは送信していません。アプリで確認してください</string>
+    <string name="notif_finish_failed">%1$s: 送信できませんでした</string>
+
+    <!-- 競合（設計書 §6.4） -->
+    <string name="action_open_conflicts">競合を見る</string>
+    <string name="action_history">履歴</string>
+    <string name="action_ok">OK</string>
+    <string name="action_later">あとで</string>
+    <string name="loading">読み込んでいます…</string>
+    <string name="conflict_title">%1$s の競合</string>
+    <string name="conflict_none">競合はありません</string>
+    <string name="conflict_help">手元とサーバーの両方で変わったファイルです。どちらを残すかを選んでください。決められないときは、そのままにしておけます（何も上書きしません）</string>
+    <string name="conflict_playing">この端末でプレイ中のため、サーバー版は使えません。エミュを終了して「送信して終了」を押してから選んでください</string>
+    <string name="conflict_bulk">%1$d 件まとめて</string>
+    <string name="conflict_kind_rejected">送信中に他の端末が更新しました</string>
+    <string name="conflict_local">手元</string>
+    <string name="conflict_local_missing">ありません</string>
+    <string name="conflict_server">サーバー</string>
+    <string name="conflict_server_version">版 %1$d</string>
+    <string name="action_keep_local">手元を残す</string>
+    <string name="action_use_remote">サーバー版を使う</string>
+    <string name="action_keep_local_all">すべて手元を残す</string>
+    <string name="action_use_remote_all">すべてサーバー版を使う</string>
+    <string name="confirm_keep_local_title">手元の版を送信します（%1$d 件）</string>
+    <string name="confirm_keep_local_text">手元の版をサーバーの最新にします。サーバーの今の版は履歴に残るので、あとで戻せます</string>
+    <string name="confirm_use_remote_title">サーバー版にします（%1$d 件）</string>
+    <string name="confirm_use_remote_text">手元のファイルをアプリの backups/ に退避してから、サーバー版で置き換えます</string>
+    <string name="msg_resolved_local">手元の版を送信しました（%1$d 件）</string>
+    <string name="msg_resolved_remote">サーバー版にしました（%1$d 件）。手元の版は backups/ に退避しました</string>
+    <string name="msg_resolve_still_conflicts">まだ競合が %1$d 件あります（他の端末が更新した可能性があります）</string>
+
+    <!-- 履歴（設計書 §6.5） -->
+    <string name="history_title">%1$s の履歴</string>
+    <string name="history_files_help">サーバー上のファイルです。選ぶと、残っている版の一覧を表示します</string>
+    <string name="history_no_files">サーバーにファイルがありません</string>
+    <string name="history_file_line">版 %1$d・%2$s・%3$s・%4$s</string>
+    <string name="file_history_title">版の履歴</string>
+    <string name="badge_latest">最新</string>
+    <string name="badge_same_as_local">手元と同じ</string>
+    <string name="action_restore_this">この版に戻す</string>
+    <string name="action_restore">戻す</string>
+    <string name="action_pull_now">取得する</string>
+    <string name="restore_title">v%1$d に戻しますか？</string>
+    <string name="restore_text">v%1$d の内容を、新しい版（v%2$d）として最新にします。今までの版は履歴に残ります</string>
+    <string name="msg_restored">v%1$d の内容を v%2$d として最新にしました</string>
+    <string name="pull_after_restore_title">v%1$d を取得しますか？</string>
+    <string name="pull_after_restore_text">手元のファイルを、戻した版で置き換えます（このファイルだけを取得します）。手元も変えていた場合は、上書きせずに競合として知らせます</string>
+    <string name="msg_pulled">取得して、手元に反映しました</string>
+    <string name="msg_pull_conflict">手元も変わっているため、競合になりました。競合の画面で選んでください</string>
+
+    <!-- 定期送信（設計書 §5.3） -->
+    <string name="section_periodic">定期送信</string>
+    <string name="label_periodic_push">1時間ごとに送信する</string>
+    <string name="hint_periodic_push">ネットワークにつながっているときに、手元の変更を送信します（取得はしません）。この端末でプレイ中のターゲットは送信しません。12 時間以上プレイ中のままなら、送信し忘れを知らせます</string>
+    <string name="notif_periodic_conflicts">%1$s: 競合が %2$d 件あります</string>
+    <string name="notif_periodic_conflicts_text">定期送信で見つかりました。何も上書きしていません。アプリで確認してください</string>
+    <string name="notif_periodic_error">定期送信ができません</string>
+    <string name="notif_forgotten">%1$s のセーブを送信し忘れていませんか</string>
+    <string name="notif_forgotten_text">12 時間以上、プレイ中のままです。遊び終わっていたら、エミュを終了してから [送信して終了] を押してください</string>
+
+    <!-- ファイルごとの失敗 -->
+    <string name="err_file_too_large">ファイルが大きすぎます（サーバーの上限を超えています）</string>
+    <string name="err_no_space">端末の空き容量が足りません</string>
+    <string name="err_file_access">ファイルを読み書きできません（%1$s）</string>
+
+    <!-- 自動送信（エミュが終わったら送る） -->
+    <string name="section_auto_finish">自動送信</string>
+    <string name="label_auto_finish">エミュを閉じたら自動で送信する</string>
+    <string name="hint_auto_finish">「遊ぶ」で起動したエミュが前面から消えて、そのまま戻ってこなければ、終わったとみなして送信します（画面が消えている間は数えません）。送信のあと 10 分以内にエミュに戻れば、プレイ中に戻ります</string>
+    <string name="label_auto_finish_minutes">送るまでの待ち時間</string>
+    <string name="minutes_value">%1$d 分</string>
+    <string name="perm_usage_access">使用状況へのアクセス（自動送信に必要）</string>
+    <string name="banner_usage_access">エミュを閉じたら自動で送信するには、「使用状況へのアクセス」を許可してください</string>
+    <string name="notif_watch_title">emusync</string>
+    <string name="notif_watch_starting">エミュを起動しています…</string>
+    <string name="notif_watch_playing">%1$s：エミュを閉じると、%2$d 分後に自動で送信します</string>
+    <string name="notif_watch_away">%1$s：エミュから離れました。あと %2$s で送信します（戻れば送りません）</string>
+    <string name="notif_watch_finishing">%1$s：送信しています…</string>
+    <string name="notif_watch_grace">%1$s：送信しました。%2$d 分以内にエミュに戻ると、プレイ中に戻ります</string>
+    <string name="notif_resumed_locked">%1$s：%2$s がプレイ中です</string>
+    <string name="notif_resumed_locked_text">エミュに戻りましたが、ほかの端末がロックを持っています。両方で遊ぶと、セーブが競合するおそれがあります</string>
+</resources>
