@@ -15,12 +15,16 @@ interface HashCache {
     /** 走査で見つからなかったパスの記録を消す */
     fun retain(target: String, rels: Set<String>)
 
+    /** 1 つのパスの記録を消して、保存もする（次の走査で計算し直させる） */
+    fun remove(target: String, rel: String)
+
     companion object {
         /** キャッシュしない */
         val NONE = object : HashCache {
             override fun get(target: String, rel: String): CachedHash? = null
             override fun put(target: String, rel: String, value: CachedHash) = Unit
             override fun retain(target: String, rels: Set<String>) = Unit
+            override fun remove(target: String, rel: String) = Unit
         }
     }
 }
@@ -38,5 +42,9 @@ class InMemoryHashCache : HashCache {
 
     override fun retain(target: String, rels: Set<String>) {
         map.keys.removeIf { it.first == target && it.second !in rels }
+    }
+
+    override fun remove(target: String, rel: String) {
+        map.remove(target to rel)
     }
 }

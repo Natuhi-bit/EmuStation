@@ -40,6 +40,12 @@ interface LocalFs {
 
     /** ファイルを移す（既存のファイルは置き換える）。移し先の親フォルダは作る */
     fun move(src: String, dst: String)
+
+    /**
+     * そのファイルのハッシュの記録（キャッシュ）を消して、次の走査で計算し直させる。
+     * 送信・受信したファイルに使う（記録が古い中身のままだと、送ったのに「未送信」と出続ける）
+     */
+    fun forgetHash(target: SyncTarget, rel: String) = Unit
 }
 
 /** `<ファイル名>.emusync-tmp` に書き、[commit] で fsync して本来の名前に rename する */

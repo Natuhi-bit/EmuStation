@@ -55,6 +55,9 @@ interface HashCacheDao {
     @Query("DELETE FROM hash_cache WHERE target = :target")
     fun deleteTarget(target: String)
 
+    @Query("DELETE FROM hash_cache WHERE target = :target AND rel = :rel")
+    fun delete(target: String, rel: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertAll(rows: List<HashCacheEntity>)
 

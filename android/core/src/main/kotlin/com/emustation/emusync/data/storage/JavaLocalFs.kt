@@ -21,7 +21,10 @@ import java.security.MessageDigest
  * `java.io` / `java.nio` によるファイル操作（設計書 §8.1。SAF は使わない）。
  * Android に依存しないので、JVM の単体テストでもそのまま使う。
  */
-class JavaLocalFs(private val hashCache: HashCache = HashCache.NONE) : LocalFs {
+class JavaLocalFs(
+    private val hashCache: HashCache = HashCache.NONE,
+    private val clock: () -> Long = System::currentTimeMillis,
+) : LocalFs {
 
     override fun scan(target: SyncTarget): Map<String, String> {
         val root = File(target.root)
@@ -66,12 +69,17 @@ class JavaLocalFs(private val hashCache: HashCache = HashCache.NONE) : LocalFs {
             if (it.size == size && it.lastModified == mtime) return it.sha256
         }
         val sha = sha256(f)
-        // ハッシュ計算中に書き換えられていたら記録しない
-        if (f.length() == size && f.lastModified() == mtime) {
+        // ハッシュ計算中に書き換えられていたら記録しない。
+        // 更新されたばかり（RACY_MS 以内）のファイルも記録しない：更新日時の細かさ（1〜2 秒）の中で
+        // さらに書き換えられると、大きさも更新日時も同じまま中身だけ変わり、古いハッシュを使い続けてしまう
+        // （エミュが書き込んでいる最中に調べたとき。メモリーカードは大きさがいつも同じ）。Git の racy-clean と同じ考え方
+        if (f.length() == size && f.lastModified() == mtime && clock() - mtime > RACY_MS) {
             hashCache.put(target, rel, CachedHash(size, mtime, sha))
         }
         return sha
     }
+
+    override fun forgetHash(target: SyncTarget, rel: String) = hashCache.remove(target.name, rel)
 
     override fun prepareUpload(path: String): UploadContent {
         val f = File(path)
@@ -134,6 +142,9 @@ class JavaLocalFs(private val hashCache: HashCache = HashCache.NONE) : LocalFs {
 
     companion object {
         const val TMP_SUFFIX = ".emusync-tmp"
+
+        /** これより新しく更新されたファイルのハッシュはキャッシュしない（ミリ秒。FAT の更新日時は 2 秒刻み） */
+        const val RACY_MS = 3_000L
 
         fun sha256(f: File): String {
             val md = MessageDigest.getInstance("SHA-256")

@@ -39,4 +39,9 @@ class RoomHashCache(private val dao: HashCacheDao) : HashCache {
         m.keys.retainAll(rels)
         dao.replaceTarget(target, m.map { (rel, c) -> HashCacheEntity(target, rel, c.size, c.lastModified, c.sha256) })
     }
+
+    override fun remove(target: String, rel: String) {
+        of(target).remove(rel)
+        dao.delete(target, rel)
+    }
 }

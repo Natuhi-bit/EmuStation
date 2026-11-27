@@ -79,6 +79,36 @@ class JavaLocalFsTest {
     }
 
     @Test
+    fun hashCache_doesNotKeepFilesChangedJustNow() {
+        // 更新されたばかりのファイルは記録しない（同じ 1 秒の中でさらに書き換えられると、大きさも日時も同じまま中身が変わる）
+        val root = tmp.newFolder("racy")
+        val f = File(root, "m.ps2")
+        write(f, "aaaa")
+        val mtime = 1_700_000_000_000L
+        f.setLastModified(mtime)
+        val cache = InMemoryHashCache()
+        val t = SyncTarget("ps2", root.path)
+        var now = mtime + 1_000
+        val fs = JavaLocalFs(cache) { now }
+        assertEquals(sha256("aaaa"), fs.scan(t)["m.ps2"])
+        assertEquals(null, cache.get("ps2", "m.ps2"))
+
+        // エミュがその間に書き終えた（大きさ・更新日時は同じ）。記録していないので、本当の中身を読む
+        f.writeText("bbbb")
+        f.setLastModified(mtime)
+        assertEquals(sha256("bbbb"), fs.scan(t)["m.ps2"])
+
+        // 時間が経てば記録する
+        now = mtime + 10_000
+        assertEquals(sha256("bbbb"), fs.scan(t)["m.ps2"])
+        assertEquals(sha256("bbbb"), cache.get("ps2", "m.ps2")?.sha256)
+
+        // 記録を消せる（送受信したあと）
+        fs.forgetHash(t, "m.ps2")
+        assertEquals(null, cache.get("ps2", "m.ps2"))
+    }
+
+    @Test
     fun atomicWrite_commitReplaces_abortKeepsOriginal() {
         val fs = JavaLocalFs()
         val f = File(tmp.root, "new/dir/f.bin") // 親フォルダは作られる

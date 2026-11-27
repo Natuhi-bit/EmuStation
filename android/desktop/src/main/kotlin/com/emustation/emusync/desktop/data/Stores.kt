@@ -68,8 +68,16 @@ class JsonHashCache(private val dir: File) : HashCache {
     override fun retain(target: String, rels: Set<String>) {
         val m = of(target)
         m.keys.retainAll(rels)
-        writeAtomic(file(target), json.encodeToString(m.mapValues { CacheEntry(it.value.size, it.value.lastModified, it.value.sha256) }))
+        save(target, m)
     }
+
+    override fun remove(target: String, rel: String) {
+        val m = of(target)
+        if (m.remove(rel) != null) save(target, m)
+    }
+
+    private fun save(target: String, m: Map<String, CachedHash>) =
+        writeAtomic(file(target), json.encodeToString(m.mapValues { CacheEntry(it.value.size, it.value.lastModified, it.value.sha256) }))
 }
 
 /** 競合の記録 */

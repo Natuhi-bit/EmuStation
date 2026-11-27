@@ -129,6 +129,7 @@ class SyncEngine(
             }
             val d = writeAtomic(localPath(rel)) { out -> remote.download(prefix + rel, out) }
             base[rel] = BaseEntry(d.sha256, d.version)
+            fs.forgetHash(t, rel)
             downloaded += rel
         }
 
@@ -145,6 +146,8 @@ class SyncEngine(
                 )
                 is UploadOutcome.Ok -> {
                     base[rel] = BaseEntry(o.sha256, o.version)
+                    // 送ったのは今の本当の中身。ハッシュの記録が古い中身のままだと「未送信」と出続けるので、計算し直させる
+                    fs.forgetHash(t, rel)
                     uploaded += rel
                 }
             }

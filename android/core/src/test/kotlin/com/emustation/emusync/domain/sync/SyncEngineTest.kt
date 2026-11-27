@@ -42,6 +42,47 @@ class SyncEngineTest {
     private fun remote(rel: String, text: String, version: Int) = server.seed("psp/$rel", text.toByteArray(), version)
 
     @Test
+    fun staleHashCache_isRepairedAfterUpload_soUnsentClears() {
+        // ハッシュの記録が古い中身のまま（大きさ・更新日時は今のファイルと同じ）になっていた端末。
+        // 画面では「未送信」と出続け、同期しても消えなかった
+        val f = local("Mcd001.ps2", "new!")
+        val mtime = 1_700_000_000_000L
+        f.setLastModified(mtime)
+        remote("Mcd001.ps2", "new!", 1)
+        runBlocking { baseStore.save("psp", mapOf("Mcd001.ps2" to BaseEntry(sha256("new!"), 1))) }
+        val cache = com.emustation.emusync.data.storage.InMemoryHashCache()
+        cache.put("psp", "Mcd001.ps2", com.emustation.emusync.data.storage.CachedHash(4, mtime, sha256("old!")))
+        val fs = JavaLocalFs(cache)
+        fun unsent() = runBlocking { baseStore.load("psp") }.let { base -> fs.scan(target).count { (rel, sha) -> base[rel]?.sha256 != sha } }
+        assertEquals(1, unsent())
+
+        // 同期すると本当の中身を送り、記録を消す → 次に調べると本当の中身になって「未送信」が消える
+        runBlocking { SyncEngine(server.client("me"), fs, baseStore, appDir.path, mutexes = TargetMutexes()).sync(target, SyncMode.SYNC) }
+        assertEquals(null, cache.get("psp", "Mcd001.ps2"))
+        assertEquals(0, unsent())
+        // もう一度同期しても、何も送らない
+        val again = runBlocking { SyncEngine(server.client("me"), fs, baseStore, appDir.path, mutexes = TargetMutexes()).sync(target, SyncMode.SYNC) }
+        assertEquals(emptyList<String>(), again.uploaded)
+    }
+
+    @Test
+    fun download_forgetsHashOfReplacedFile() {
+        val f = local("s.bin", "AAAA")
+        val mtime = 1_700_000_000_000L
+        f.setLastModified(mtime)
+        val cache = com.emustation.emusync.data.storage.InMemoryHashCache()
+        val fs = JavaLocalFs(cache)
+        runBlocking { baseStore.save("psp", mapOf("s.bin" to BaseEntry(sha256("AAAA"), 1))) }
+        remote("s.bin", "BBBB", 2)
+        fs.scan(target)
+        assertEquals(sha256("AAAA"), cache.get("psp", "s.bin")?.sha256)
+        val r = runBlocking { SyncEngine(server.client("me"), fs, baseStore, appDir.path, mutexes = TargetMutexes()).sync(target, SyncMode.SYNC) }
+        assertEquals(listOf("s.bin"), r.downloaded)
+        assertEquals(null, cache.get("psp", "s.bin"))
+        assertEquals(sha256("BBBB"), fs.scan(target)["s.bin"])
+    }
+
+    @Test
     fun dryRun_changesNothing() {
         local("up.bin", "u")
         remote("down.bin", "d", 1)

@@ -74,6 +74,11 @@ class SyncRepositoryTest {
         val o = repo.run(target, SyncMode.SYNC) as SyncOutcome.Done
         assertEquals(listOf("A/DATA.BIN"), o.result.uploaded)
         assertEquals(listOf("A/DATA.BIN"), db.baseState().getAll("psp").map { it.rel })
+        // 送ったファイルのハッシュの記録は消す（次に調べるとき計算し直す）
+        assertEquals(emptyList<String>(), db.hashCache().getAll("psp").map { it.rel })
+        // 書き込みから時間が経ったファイルは、調べたときに記録する
+        File(dataDir, "SAVEDATA/A/DATA.BIN").setLastModified(1_700_000_000_000)
+        assertEquals(LocalState.Scanned(0, 1), repo.localState(target))
         assertEquals(listOf("A/DATA.BIN"), db.hashCache().getAll("psp").map { it.rel })
 
         val log = db.syncLog().observeRecent().first().single()
