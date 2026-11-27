@@ -264,9 +264,9 @@ class GamepadTest {
         pad(B) // オプションを閉じる
         compose.onNode(hasText("情報とカバーを取得し直す")).assertDoesNotExist()
 
-        // 設定 → コントローラー（サーバー・エミュ 4 つ・ゲームの情報 の次）→ 「B で決定」を選ぶ
+        // 設定 → コントローラー（サーバー・エミュ（機種の数だけ）・ゲームの情報 の次）→ 「B で決定」を選ぶ
         pad(Left)
-        repeat(6) { pad(Down) }
+        repeat(com.emustation.emusync.desktop.domain.Presets.all.size + 2) { pad(Down) }
         pad(A)
         val found = compose.onAllNodes(hasText("決定のボタン")).fetchSemanticsNodes().isNotEmpty()
         assertTrue("コントローラーのパネルを開けない", found)

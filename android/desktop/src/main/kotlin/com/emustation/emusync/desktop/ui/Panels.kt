@@ -216,6 +216,7 @@ fun SystemPanel(app: AppController, target: String, onClose: () -> Unit) {
     var msg by remember { mutableStateOf<String?>(null) }
     PanelScaffold("${Presets.machineOf(target)}（${preset?.emulator ?: "エミュ"}）", onClose) {
         Note("ターゲット名：$target（Android と同じ名前でセーブを共有します）")
+        preset?.note?.let { Note(it, XmbText.warn) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(exe, { exe = it }, "エミュの実行ファイル（${preset?.exeNames?.first() ?: ".exe"}）", Modifier.weight(1f), tag = "emu-exe")
             Spacer(Modifier.width(8.dp))

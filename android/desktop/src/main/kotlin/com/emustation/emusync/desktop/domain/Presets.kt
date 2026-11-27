@@ -14,11 +14,16 @@ data class SystemPreset(
     val excludes: List<String>,
     /** ROM の欄の説明 */
     val romHint: String,
+    /** エミュの設定の画面に出す注意（なければ null） */
+    val note: String? = null,
     /** セーブのフォルダの候補（エミュの exe の場所から探すものを含む） */
     val saveCandidates: (exeDir: File?) -> List<File>,
 )
 
 object Presets {
+    /** DS のゲーム本体・アーカイブ（セーブと同じフォルダにあっても送らない）。all より前に置く（初期化の順番） */
+    val NDS_EXCLUDES = listOf("*.nds", "*.dsi", "*.srl", "*.zip", "*.7z", "*.rar")
+
     private val home = File(System.getProperty("user.home"))
     private val appData = File(System.getenv("APPDATA") ?: home.path)
     private val documents = File(home, "Documents")
@@ -46,6 +51,40 @@ object Presets {
             "--no-gui \"{rom}\"", setOf("bin", "iso"), emptyList(),
             "EBOOT.BIN（PS3_GAME\\USRDIR の中）または ISO",
         ) { dir -> listOfNotNull(dir?.let { File(it, "dev_hdd0/home/00000001/savedata") }) },
+        SystemPreset(
+            "nds", "DS", "melonDS", listOf("melonDS.exe"),
+            "\"{rom}\"", setOf("nds", "dsi", "srl", "zip", "7z"), NDS_EXCLUDES,
+            "NDS のファイル",
+            note = "melonDS の設定（Config → Path settings → Save files）で、セーブの置き場所を決めて、そのフォルダを選んでください。" +
+                "セーブの名前はゲームのファイル名になるので、Android と同じファイル名にそろえてください",
+            saveCandidates = { dir -> listOfNotNull(File(documents, "melonDS/saves"), dir?.let { File(it, "saves") }) },
+        ),
+        SystemPreset(
+            "3ds", "3DS", "Azahar", listOf("azahar.exe", "azahar-qt.exe", "lime3ds.exe", "lime3ds-gui.exe", "citra-qt.exe"),
+            "\"{rom}\"", setOf("3ds", "cci", "cxi", "3dsx", "app"), listOf("*/content/*"),
+            "3DS / CCI / CXI のファイル（復号済みのもの）",
+            note = "インストールしたゲーム（CIA）も、セーブはこのフォルダに入ります（ゲーム本体は送りません）",
+            saveCandidates = { dir ->
+                val sub = "sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000"
+                listOfNotNull(
+                    dir?.let { File(it, "user/$sub") }, // ポータブル版
+                    File(appData, "Azahar/$sub"), File(appData, "Lime3DS/$sub"), File(appData, "Citra/$sub"),
+                )
+            },
+        ),
+        SystemPreset(
+            "wii", "Wii", "Dolphin", listOf("Dolphin.exe"),
+            // -b：ゲームを閉じたら Dolphin も終わる（終わったら送信するため）
+            "-b -e \"{rom}\"", setOf("iso", "wbfs", "rvz", "wia", "gcz", "ciso", "dol", "elf"), emptyList(),
+            "ISO / WBFS / RVZ のファイル",
+            saveCandidates = { dir ->
+                val sub = "Wii/title/00010000"
+                listOfNotNull(
+                    dir?.let { File(it, "User/$sub") }, // ポータブル版（portable.txt）
+                    File(appData, "Dolphin Emulator/$sub"), File(documents, "Dolphin Emulator/$sub"),
+                )
+            },
+        ),
     )
 
     fun byTarget(target: String) = all.firstOrNull { it.target == target }

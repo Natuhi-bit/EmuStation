@@ -40,6 +40,10 @@ data class MetaSources(
     val libretroThumbs: String = "https://raw.githubusercontent.com/libretro-thumbnails",
     /** libretro のサムネイルの一覧（GitHub API） */
     val libretroTree: String = "https://api.github.com/repos/libretro-thumbnails/{repo}/git/trees/master?recursive=1",
+    /** GameTDB のタイトルの一覧（DS・3DS・Wii の日本語のタイトル）。{db} は wiitdb・dstdb・3dstdb */
+    val gametdbTitles: String = "https://www.gametdb.com/{db}.txt?LANG=JA",
+    /** GameTDB のカバー */
+    val gametdbArt: String = "https://art.gametdb.com",
 )
 
 /**
@@ -62,6 +66,7 @@ class GameMetadata(
     suspend fun lookup(target: String, rom: String, savePath: String? = null, emulatorExe: String? = null): GameMeta =
         withContext(Dispatchers.IO) {
             val info = RomReader.read(target, rom, savePath, emulatorExe)
+            if (target in NintendoRom.TARGETS) return@withContext nintendo(target, info)
             val dat = datFor(target)
             // 型番が読めなかったときは、ファイル名を Redump・No-Intro の名前と照らし合わせる（"Ryuu ga Gotoku (Japan).chd" など）
             val byName = if (info.serial == null) dat?.byName(java.io.File(rom).nameWithoutExtension).orEmpty() else emptyList()
@@ -87,6 +92,46 @@ class GameMetadata(
                 ?: (info.icon?.takeIf(::isImage)?.let { it to "ROM のアイコン" } ?: (null to null))
             GameMeta(serial, title, region, cover, source)
         }
+
+    // ---------------------------------------------------------------- 任天堂（DS・3DS・Wii）
+    private val tdbTitles = ConcurrentHashMap<String, Map<String, String>>()
+
+    /**
+     * ID（ROM・ファイル名から）→ GameTDB の日本語のタイトルとカバー。
+     * つながらないときは ROM の中のタイトル（DS のバナー・3DS の SMDH）とアイコン
+     */
+    private fun nintendo(target: String, info: RomInfo): GameMeta {
+        val id = info.serial
+        val title = id?.let { gametdbTitles(target)?.get(it) }?.let(NintendoRom::cleanTitle)?.takeIf { it.isNotEmpty() } ?: info.title
+        val region = id?.let(NintendoRom::regionOf)
+        val cover = id?.let { i ->
+            NintendoRom.coverLangs(i).asSequence().mapNotNull { lang ->
+                val path = when (target) {
+                    "wii" -> "wii/cover/$lang/$i.png"
+                    "nds" -> "ds/coverM/$lang/$i.jpg"
+                    else -> "3ds/coverM/$lang/$i.jpg"
+                }
+                download(sources.gametdbArt.trimEnd('/') + "/" + path)?.takeIf(::isImage)
+            }.firstOrNull()
+        }
+        return when {
+            cover != null -> GameMeta(id, title, region, cover, "GameTDB")
+            info.icon?.let(::isImage) == true -> GameMeta(id, title, region, info.icon, "ROM のアイコン")
+            else -> GameMeta(id, title, region, null, null)
+        }
+    }
+
+    /** GameTDB の「ID = タイトル」の一覧（30 日ごとに取り直す） */
+    private fun gametdbTitles(target: String): Map<String, String>? {
+        val db = when (target) {
+            "wii" -> "wiitdb"
+            "nds" -> "dstdb"
+            else -> "3dstdb"
+        }
+        tdbTitles[db]?.let { return it }
+        val text = cached(File(cacheDir, "gametdb-$db-ja.txt"), sources.gametdbTitles.replace("{db}", db)) ?: return null
+        return parseGametdbTitles(text).also { tdbTitles[db] = it }
+    }
 
     // ---------------------------------------------------------------- カバー
     private fun findCover(target: String, serial: String?, datNames: List<String>, title: String?): Pair<ByteArray, String>? {
@@ -196,6 +241,19 @@ class GameMetadata(
             base.trimEnd('/').toHttpUrl().newBuilder().apply { segments.forEach { addPathSegment(it) } }.build().toString()
 
         /** libretro のサムネイルのファイル名では &*\/:`<>?\| を _ にする */
+        /** "RMCJ01 = マリオカートWii" の行（最初の行は見出し）。同じ ID が何度も出たら最初のもの */
+        fun parseGametdbTitles(text: String): Map<String, String> {
+            val out = LinkedHashMap<String, String>()
+            for (line in text.lineSequence()) {
+                val i = line.indexOf(" = ")
+                if (i <= 0) continue
+                val id = line.substring(0, i).trim()
+                if (id == "TITLES" || !Regex("[A-Z0-9]{4,6}").matches(id)) continue
+                out.putIfAbsent(id, line.substring(i + 3).trim())
+            }
+            return out
+        }
+
         fun libretroFileName(name: String) = name.replace(Regex("[&*/:`<>?\\\\|]"), "_")
 
         private fun normalizeName(s: String) = s.lowercase().replace(Regex("\\s+"), " ").trim()

@@ -30,10 +30,15 @@ object RomReader {
                 "psp" -> readPsp(File(rom))
                 "ps3" -> readPs3(File(rom))
                 "vita" -> readVita(rom, savePath, emulatorExe)
+                in NintendoRom.TARGETS -> NintendoRom.read(target, File(rom))
                 else -> null
             }
         }.getOrNull()
-        val serial = fromRom?.serial ?: serialFromName(File(rom).name)
+        val serial = fromRom?.serial ?: if (target in NintendoRom.TARGETS) {
+            NintendoRom.idFromName(target, File(rom).name)
+        } else {
+            serialFromName(File(rom).name)
+        }
         return (fromRom ?: RomInfo()).copy(serial = serial)
     }
 

@@ -200,10 +200,10 @@ fun buildCategories(
 }
 
 /** ハードの列の順番 */
-private val HARDWARE_ORDER = listOf("ps2", "psp", "vita", "ps3")
+private val HARDWARE_ORDER = listOf("ps2", "psp", "vita", "ps3", "nds", "3ds", "wii")
 
 private fun hardwareIcon(target: String) = when (target) {
-    "psp", "vita" -> Icons.Filled.StayCurrentLandscape // 携帯機
+    "psp", "vita", "nds", "3ds" -> Icons.Filled.StayCurrentLandscape // 携帯機
     else -> Icons.Filled.Album // ディスク
 }
 

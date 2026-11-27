@@ -239,6 +239,24 @@ py client\emusync.py -c client\config.yaml run ps2          # ロック → 取�
 
 ---
 
+### 任天堂のハード（DS・3DS・Wii）
+
+| ハード | ターゲット名 | エミュ（Windows・Android） | 同期するフォルダ |
+|---|---|---|---|
+| DS | `nds` | melonDS | melonDS の設定で決めたセーブのフォルダ（`.sav`）。ゲーム本体（`.nds` など）は送らない |
+| 3DS | `3ds` | Azahar | ユーザーフォルダの `sdmc/Nintendo 3DS/000…/000…`（セーブと追加データ）。インストールしたゲームの本体（`content`）は送らない |
+| Wii | `wii` | Dolphin | ユーザーフォルダの `Wii/title/00010000`（ディスクのゲームのセーブ） |
+
+- **DS**：melonDS のセーブの名前はゲームのファイル名になる。Windows と Android で、ゲームのファイル名をそろえること。
+  Windows は melonDS の Config → Path settings → Save files で、セーブの置き場所を決めておく
+- **3DS**：Azahar は復号済みのゲーム（.3ds・.cci・.cxi）を使う。ユーザーフォルダは Windows なら `%APPDATA%\Azahar`（ポータブル版は exe の隣の `user`）
+- **Wii**：Windows の Dolphin は `-b`（ゲームを閉じたら Dolphin も終わる）で起動する。ユーザーフォルダは `%APPDATA%\Dolphin Emulator`
+  か `ドキュメント\Dolphin Emulator`（ポータブル版は exe の隣の `User`）。
+  **Android の Dolphin は、既定でユーザーフォルダを `Android/data/` の中に置くので、EmuStation から読めない**。
+  `Android/data/` の外のフォルダを使えるか、実機で確かめる必要がある
+- **ゲームの情報とカバー**：ゲームファイルから ID（DS・3DS は 4 文字、Wii は 6 文字。例 `RMCJ01`）を読み、GameTDB の日本語のタイトルとカバーを使う。
+  つながらないときは、ゲームファイルの中のタイトルとアイコン（DS のバナー・3DS の SMDH）を使う。ID はファイル名の `[RMCJ01]` からも読む
+
 ## 4. 端末ごとにフォルダをそろえる際の注意
 
 - **ターゲット名とフォルダ内の構造をそろえる。** 例：PPSSPP なら `SAVEDATA` フォルダを Windows と Android の両方でターゲット `ppsspp` に割り当てると、中の `ULJM05800/...` がそのまま一致する
